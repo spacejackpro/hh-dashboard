@@ -15,7 +15,7 @@ echo  Обновление HH Dashboard
 echo ============================================
 echo.
 echo [1/3] Скачиваю свежую версию с GitHub...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://codeload.github.com/OWNER/hh-dashboard/zip/refs/heads/main' -OutFile (Join-Path $env:TEMP 'hhdash.zip')"
+powershell -NoProfile -Command "Invoke-WebRequest 'https://codeload.github.com/spacejackpro/hh-dashboard/zip/refs/heads/main' -OutFile (Join-Path $env:TEMP 'hhdash.zip')"
 if errorlevel 1 (
     echo Не удалось скачать. Проверь интернет и попробуй ещё раз.
     pause

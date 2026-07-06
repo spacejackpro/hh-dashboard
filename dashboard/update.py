@@ -13,8 +13,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 VERSION_FILE = PROJECT_DIR / "VERSION"
 
-# owner/repo подставляется при публикации репозитория
-REPO_SLUG = "OWNER/hh-dashboard"
+REPO_SLUG = "spacejackpro/hh-dashboard"
 REPO_URL = f"https://github.com/{REPO_SLUG}"
 RAW_VERSION_URL = f"https://raw.githubusercontent.com/{REPO_SLUG}/main/VERSION"
 
