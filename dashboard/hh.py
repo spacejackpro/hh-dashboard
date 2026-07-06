@@ -163,6 +163,20 @@ def _make_tool():
     return tool
 
 
+def clear_local_auth() -> None:
+    """Убирает токен из config.json и куки — локальная часть выхода."""
+    cfg = read_config()
+    if "token" in cfg:
+        cfg.pop("token")
+        CONFIG_FILE.write_text(
+            json.dumps(cfg, indent=2, sort_keys=True, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    cookies = CONFIG_DIR / "cookies.txt"
+    if cookies.exists():
+        cookies.unlink()
+
+
 def get_whoami() -> dict[str, Any]:
     """Живой запрос /me через библиотеку (медленнее, чем чтение базы)."""
     tool = _make_tool()

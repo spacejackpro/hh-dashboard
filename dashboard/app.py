@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -16,8 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import hh
-from .runner import runner
-from .update import version_info
+from .runner import HH_TOOL_EXE, runner
+from .update import start_update, update_state, version_info
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -42,6 +43,35 @@ def status() -> dict:
 @app.get("/api/version")
 def version() -> dict:
     return version_info()
+
+
+@app.post("/api/update")
+def update() -> dict:
+    if runner.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    try:
+        start_update()
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return {"started": True}
+
+
+@app.get("/api/update/status")
+def update_status() -> dict:
+    return update_state()
+
+
+@app.post("/api/logout")
+def logout() -> dict:
+    if runner.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    try:
+        # отзываем токен на стороне hh.ru
+        subprocess.run([str(HH_TOOL_EXE), "logout"], timeout=60, capture_output=True)
+    except Exception:
+        pass  # даже если сервер hh.ru недоступен, локально всё равно выходим
+    hh.clear_local_auth()
+    return {"ok": True}
 
 
 @app.get("/api/whoami")

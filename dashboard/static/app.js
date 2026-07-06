@@ -254,6 +254,57 @@ async function checkUpdate() {
   } catch { /* нет сети — проверим в следующий раз */ }
 }
 
+$("#do-update-btn").addEventListener("click", async () => {
+  try {
+    await api("/api/update", { method: "POST" });
+  } catch (e) {
+    alert("Не удалось начать обновление: " + e.message);
+    return;
+  }
+  $("#updating-overlay").classList.remove("hidden");
+
+  const startedAt = Date.now();
+  let sawRestart = false;
+  const timer = setInterval(async () => {
+    if (Date.now() - startedAt > 5 * 60 * 1000) {
+      clearInterval(timer);
+      $("#updating-hint").textContent =
+        "Что-то пошло не так. Закрой приложение и запусти update.cmd вручную.";
+      return;
+    }
+    try {
+      if (!sawRestart) {
+        const st = await api("/api/update/status");
+        if (st.error) {
+          clearInterval(timer);
+          $("#updating-overlay").classList.add("hidden");
+          alert("Ошибка обновления: " + st.error + "\nЗапасной способ: update.cmd");
+        }
+      } else {
+        await api("/api/version");
+        clearInterval(timer);
+        location.reload();
+      }
+    } catch {
+      sawRestart = true; // сервер ушёл на перезапуск — ждём возвращения
+    }
+  }, 2000);
+});
+
+$("#logout-btn").addEventListener("click", async () => {
+  if (!confirm("Выйти из аккаунта hh.ru? Для работы придётся войти заново.")) return;
+  try {
+    await api("/api/logout", { method: "POST" });
+  } catch (e) {
+    alert("Не получилось выйти: " + e.message);
+    return;
+  }
+  userName = null;
+  await loadStatus();
+  loadOverview();
+  document.querySelector('.nav-btn[data-tab="overview"]').click();
+});
+
 // ---------- Старт ----------
 loadStatus();
 loadOverview();

@@ -15,4 +15,12 @@ if not exist ".venv\Scripts\uvicorn.exe" (
 )
 
 start "" http://127.0.0.1:8517
+
+:run
+if exist ".update-pending" (
+    echo Довожу обновление: проверяю движок и библиотеки...
+    .venv\Scripts\pip.exe install -q -U -r requirements.txt
+    del ".update-pending"
+)
 .venv\Scripts\uvicorn.exe dashboard.app:app --host 127.0.0.1 --port 8517
+if "%errorlevel%"=="42" goto run
