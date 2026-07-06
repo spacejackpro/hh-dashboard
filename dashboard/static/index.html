@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HH Dashboard</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">HH<span>Dashboard</span></div>
+    <nav>
+      <button class="nav-btn active" data-tab="overview">Обзор</button>
+      <button class="nav-btn" data-tab="negotiations">Отклики</button>
+      <button class="nav-btn" data-tab="skipped">Пропущенные</button>
+      <button class="nav-btn" data-tab="run">Запуск</button>
+    </nav>
+    <div class="auth-badge" id="auth-badge">проверка…</div>
+  </aside>
+
+  <main>
+    <!-- Обзор -->
+    <section id="tab-overview" class="tab active">
+      <h1>Обзор</h1>
+      <div id="update-banner" class="banner update hidden">
+        <div>
+          <b>Вышла новая версия <span id="update-ver"></span>!</b><br>
+          <span>Закрой приложение (чёрное окно сервера) и запусти <code>update.cmd</code> в папке программы — обновление займёт минуту.</span>
+        </div>
+      </div>
+      <div id="auth-banner" class="banner hidden">
+        <div>
+          <b>Ты не авторизован на hh.ru.</b><br>
+          <span id="auth-hint">Нажми кнопку — откроется окно браузера, где нужно войти в свой аккаунт как обычно (пароль или код из SMS).</span>
+        </div>
+        <button class="btn primary" id="login-btn">Войти в hh.ru</button>
+      </div>
+      <div class="cards" id="stats-cards"></div>
+      <h2>Резюме</h2>
+      <div id="resumes-box" class="table-box"></div>
+    </section>
+
+    <!-- Отклики -->
+    <section id="tab-negotiations" class="tab">
+      <h1>Отклики</h1>
+      <div id="negotiations-box" class="table-box"></div>
+    </section>
+
+    <!-- Пропущенные -->
+    <section id="tab-skipped" class="tab">
+      <h1>Пропущенные вакансии</h1>
+      <div id="skipped-box" class="table-box"></div>
+    </section>
+
+    <!-- Запуск -->
+    <section id="tab-run" class="tab">
+      <h1>Запуск операций</h1>
+      <div class="run-grid">
+        <form id="apply-form" class="panel">
+          <h2>Рассылка откликов</h2>
+          <label>Каким резюме откликаться
+            <select name="resume_id">
+              <option value="">первое резюме (по умолчанию)</option>
+            </select>
+          </label>
+          <label>Поисковая фраза
+            <input name="search" placeholder="Например: Python разработчик">
+          </label>
+          <label>Мин. зарплата, ₽
+            <input name="salary" type="number" min="0" step="5000" placeholder="не важно">
+          </label>
+          <label>Максимум откликов за запуск
+            <input name="max_responses" type="number" min="1" max="200" value="10">
+          </label>
+          <label class="check"><input name="only_with_salary" type="checkbox"> Только с указанной зарплатой</label>
+          <label class="check"><input name="skip_tests" type="checkbox" checked> Пропускать вакансии с тестами</label>
+          <label class="check"><input name="dry_run" type="checkbox" checked> Пробный запуск (без реальных откликов)</label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" id="apply-btn">Запустить рассылку</button>
+          </div>
+        </form>
+
+        <div class="panel">
+          <h2>Прочее</h2>
+          <div class="btn-row col">
+            <button class="btn" id="update-btn">Поднять все резюме</button>
+            <button class="btn" id="whoami-btn">Проверить авторизацию</button>
+            <button class="btn danger" id="cancel-btn" disabled>Остановить операцию</button>
+          </div>
+        </div>
+      </div>
+
+      <h2>Лог</h2>
+      <pre id="log" class="log">— здесь появится вывод операции —</pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
