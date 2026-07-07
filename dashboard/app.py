@@ -12,13 +12,13 @@ import subprocess
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import hh
 from .runner import HH_TOOL_EXE, runner
-from .update import start_update, update_state, version_info
+from .update import current_version, start_update, update_state, version_info
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -27,8 +27,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+def index() -> HTMLResponse:
+    # страница не кешируется, а ссылки на js/css получают номер версии —
+    # после обновления браузер гарантированно загрузит свежий код
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace("{{V}}", current_version())
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/status")
@@ -83,8 +87,8 @@ def whoami() -> dict:
 
 
 @app.get("/api/stats")
-def stats() -> dict:
-    return hh.fetch_stats()
+def stats(fresh: bool = False) -> dict:
+    return hh.fetch_stats(fresh)
 
 
 @app.get("/api/resumes")
@@ -93,8 +97,8 @@ def resumes() -> list:
 
 
 @app.get("/api/negotiations")
-def negotiations(limit: int = 100) -> list:
-    return hh.fetch_negotiations(limit)
+def negotiations(limit: int = 100, fresh: bool = False) -> list:
+    return hh.fetch_negotiations(limit, fresh)
 
 
 @app.get("/api/skipped")

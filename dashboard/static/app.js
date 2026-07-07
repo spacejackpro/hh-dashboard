@@ -97,8 +97,8 @@ async function loadResumeOptions() {
   } catch { /* без списка остаётся вариант по умолчанию */ }
 }
 
-async function loadOverview() {
-  const stats = await api("/api/stats");
+async function loadOverview(fresh = false) {
+  const stats = await api("/api/stats" + (fresh ? "?fresh=1" : ""));
   $("#stats-cards").innerHTML = `
     <div class="card limit">
       <div class="value">${stats.today} / ${stats.daily_limit}</div>
@@ -116,8 +116,8 @@ async function loadOverview() {
   ]);
 }
 
-async function loadNegotiations() {
-  renderTable($("#negotiations-box"), await api("/api/negotiations"), [
+async function loadNegotiations(fresh = false) {
+  renderTable($("#negotiations-box"), await api("/api/negotiations" + (fresh ? "?fresh=1" : "")), [
     { title: "Вакансия", render: (r) => link(r.alternate_url, r.vacancy_name ?? r.vacancy_id) },
     { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—") },
     { title: "Зарплата", render: salary },
@@ -289,12 +289,29 @@ $("#cancel-btn").addEventListener("click", () => api("/api/cancel", { method: "P
 async function checkUpdate() {
   try {
     const v = await api("/api/version");
+    $("#app-version").textContent = "версия " + v.current;
     if (v.update_available) {
       $("#update-ver").textContent = v.latest;
       $("#update-banner").classList.remove("hidden");
     }
   } catch { /* нет сети — проверим в следующий раз */ }
 }
+
+document.querySelectorAll("[data-refresh]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Обновляю…";
+    try {
+      const target = btn.dataset.refresh;
+      if (target === "overview") await loadOverview(true);
+      else if (target === "negotiations") await loadNegotiations(true);
+      else if (target === "skipped") await loadSkipped();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Обновить данные";
+    }
+  });
+});
 
 $("#do-update-btn").addEventListener("click", async () => {
   try {

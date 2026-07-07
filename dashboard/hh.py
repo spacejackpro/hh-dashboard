@@ -109,14 +109,14 @@ _NEG_TTL = 60
 _neg_cache: dict = {"at": 0.0, "items": None}
 
 
-def _fetch_negotiations_raw() -> list[dict[str, Any]] | None:
+def _fetch_negotiations_raw(force: bool = False) -> list[dict[str, Any]] | None:
     """Все отклики из API hh.ru (новые сверху); None — если API недоступен.
 
     Метод движка get_negotiations не используем: он передаёт status=active,
     из-за чего hh.ru возвращает лишь малую часть откликов.
     """
     now = time.time()
-    if now - _neg_cache["at"] < _NEG_TTL:
+    if not force and now - _neg_cache["at"] < _NEG_TTL:
         return _neg_cache["items"]
     items = None
     if token_status()["authorized"]:
@@ -144,8 +144,10 @@ def _fetch_negotiations_raw() -> list[dict[str, Any]] | None:
     return items
 
 
-def fetch_negotiations(limit: int = 100) -> list[dict[str, Any]]:
-    raw = _fetch_negotiations_raw()
+def fetch_negotiations(
+    limit: int = 100, fresh: bool = False
+) -> list[dict[str, Any]]:
+    raw = _fetch_negotiations_raw(force=fresh)
     if raw is None:
         return []
     result = []
@@ -182,13 +184,13 @@ def fetch_skipped(limit: int = 100) -> list[dict[str, Any]]:
     )
 
 
-def fetch_stats() -> dict[str, Any]:
+def fetch_stats(fresh: bool = False) -> dict[str, Any]:
     def scalar(sql: str) -> int:
         rows = _query(sql)
         return list(rows[0].values())[0] if rows else 0
 
     today = total = 0
-    raw = _fetch_negotiations_raw()
+    raw = _fetch_negotiations_raw(force=fresh)
     if raw is not None:
         today_str = datetime.now().strftime("%Y-%m-%d")
         today = sum(
