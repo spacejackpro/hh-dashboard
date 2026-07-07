@@ -22,18 +22,52 @@ async function api(path, opts) {
   return res.json();
 }
 
-// ---------- Рендер таблиц ----------
+// ---------- Рендер таблиц (с сортировкой по клику на заголовок) ----------
 function renderTable(box, rows, columns) {
   if (!rows.length) {
     box.innerHTML = '<div class="empty">Пока пусто — данные появятся после первых запусков утилиты</div>';
     return;
   }
-  const thead = columns.map((c) => `<th>${c.title}</th>`).join("");
-  const tbody = rows
+  const state = box._sort || (box._sort = { idx: null, dir: 1 });
+  const sorted = [...rows];
+  if (state.idx !== null && columns[state.idx]?.sort) {
+    const val = columns[state.idx].sort;
+    sorted.sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1; // пустые всегда в конец
+      if (vb == null) return -1;
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * state.dir;
+      return String(va).localeCompare(String(vb), "ru") * state.dir;
+    });
+  }
+  const thead = columns
+    .map((c, i) => {
+      const arrow = state.idx === i ? (state.dir === 1 ? " ↑" : " ↓") : "";
+      return `<th data-sort-idx="${i}" title="Сортировать">${c.title}${arrow}</th>`;
+    })
+    .join("");
+  const tbody = sorted
     .map((r) => `<tr>${columns.map((c) => `<td>${c.render(r)}</td>`).join("")}</tr>`)
     .join("");
   box.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+  box.querySelectorAll("th").forEach((th) => {
+    th.addEventListener("click", () => {
+      const i = Number(th.dataset.sortIdx);
+      if (state.idx === i) state.dir = -state.dir;
+      else Object.assign(state, { idx: i, dir: 1 });
+      renderTable(box, rows, columns);
+    });
+  });
 }
+
+// числовое значение зарплаты для сортировки (от ?? до)
+const salarySort = (r) => {
+  const from = r.salary_from ?? r.vacancy_salary_from;
+  const to = r.salary_to ?? r.vacancy_salary_to;
+  return from ?? to ?? null;
+};
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
@@ -117,30 +151,30 @@ async function loadOverview(fresh = false) {
     <div class="card"><div class="value">${stats.employers}</div><div class="hint">работодателей в базе</div></div>`;
 
   renderTable($("#resumes-box"), await api("/api/resumes"), [
-    { title: "Резюме", render: (r) => link(r.alternate_url, r.title) },
-    { title: "Статус", render: (r) => esc(r.status_name ?? "—") },
-    { title: "Просмотры", render: (r) => `${r.total_views ?? 0} (+${r.new_views ?? 0} новых)` },
-    { title: "Обновлено", render: (r) => dt(r.updated_at) },
+    { title: "Резюме", render: (r) => link(r.alternate_url, r.title), sort: (r) => r.title },
+    { title: "Статус", render: (r) => esc(r.status_name ?? "—"), sort: (r) => r.status_name },
+    { title: "Просмотры", render: (r) => `${r.total_views ?? 0} (+${r.new_views ?? 0} новых)`, sort: (r) => r.total_views ?? 0 },
+    { title: "Обновлено", render: (r) => dt(r.updated_at), sort: (r) => r.updated_at },
   ]);
 }
 
 async function loadNegotiations(fresh = false) {
   renderTable($("#negotiations-box"), await api("/api/negotiations" + (fresh ? "?fresh=1" : "")), [
-    { title: "Вакансия", render: (r) => link(r.alternate_url, r.vacancy_name ?? r.vacancy_id) },
-    { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—") },
-    { title: "Зарплата", render: salary },
-    { title: "Регион", render: (r) => esc(r.area_name ?? "—") },
-    { title: "Статус", render: (r) => `<span class="state ${esc(r.state)}">${esc(r.state)}</span>` },
-    { title: "Отклик", render: (r) => dt(r.created_at) },
+    { title: "Вакансия", render: (r) => link(r.alternate_url, r.vacancy_name ?? r.vacancy_id), sort: (r) => r.vacancy_name },
+    { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—"), sort: (r) => r.employer_name },
+    { title: "Зарплата", render: salary, sort: salarySort },
+    { title: "Регион", render: (r) => esc(r.area_name ?? "—"), sort: (r) => r.area_name },
+    { title: "Статус", render: (r) => `<span class="state ${esc(r.state)}">${esc(r.state)}</span>`, sort: (r) => r.state },
+    { title: "Отклик", render: (r) => dt(r.created_at), sort: (r) => r.created_at },
   ]);
 }
 
 async function loadSkipped() {
   renderTable($("#skipped-box"), await api("/api/skipped"), [
-    { title: "Вакансия", render: (r) => link(r.alternate_url, r.name ?? r.vacancy_id) },
-    { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—") },
-    { title: "Причина", render: (r) => esc(r.reason) },
-    { title: "Когда", render: (r) => dt(r.created_at) },
+    { title: "Вакансия", render: (r) => link(r.alternate_url, r.name ?? r.vacancy_id), sort: (r) => r.name },
+    { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—"), sort: (r) => r.employer_name },
+    { title: "Причина", render: (r) => esc(r.reason), sort: (r) => r.reason },
+    { title: "Когда", render: (r) => dt(r.created_at), sort: (r) => r.created_at },
   ]);
 }
 
