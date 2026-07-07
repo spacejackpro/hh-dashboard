@@ -1,15 +1,14 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\uvicorn.exe" (
-    echo Похоже, это первый запуск — сейчас всё установлю, подожди пару минут...
+    echo First run: installing everything, this may take a few minutes...
     echo.
     call setup.cmd
 )
 if not exist ".venv\Scripts\uvicorn.exe" (
     echo.
-    echo Установка не удалась — смотри сообщения выше.
+    echo Setup failed - see messages above.
     pause
     exit /b 1
 )
@@ -18,7 +17,7 @@ start "" http://127.0.0.1:8517
 
 :run
 if exist ".update-pending" (
-    echo Довожу обновление: проверяю движок и библиотеки...
+    echo Finishing update: upgrading engine and libraries...
     .venv\Scripts\pip.exe install -q -U -r requirements.txt
     del ".update-pending"
 )
