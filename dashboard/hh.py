@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -102,21 +103,72 @@ def fetch_resumes() -> list[dict[str, Any]]:
     ]
 
 
+# Движок НЕ сохраняет отклики в свою базу (negotiations.save у автора
+# закомментирован), поэтому отклики берём живьём из API hh.ru с кэшем.
+_NEG_TTL = 60
+_neg_cache: dict = {"at": 0.0, "items": None}
+
+
+def _fetch_negotiations_raw() -> list[dict[str, Any]] | None:
+    """Все отклики из API hh.ru (новые сверху); None — если API недоступен.
+
+    Метод движка get_negotiations не используем: он передаёт status=active,
+    из-за чего hh.ru возвращает лишь малую часть откликов.
+    """
+    now = time.time()
+    if now - _neg_cache["at"] < _NEG_TTL:
+        return _neg_cache["items"]
+    items = None
+    if token_status()["authorized"]:
+        try:
+            tool = _make_tool()
+            items = []
+            page = 0
+            while True:
+                r = tool.api_client.get(
+                    "/negotiations",
+                    page=page,
+                    per_page=100,
+                    order_by="created_at",
+                    order="desc",
+                )
+                batch = r.get("items", [])
+                items.extend(batch)
+                if not batch or page + 1 >= r.get("pages", 0):
+                    break
+                page += 1
+            tool.save_token()
+        except Exception:
+            items = None
+    _neg_cache.update(at=now, items=items)
+    return items
+
+
 def fetch_negotiations(limit: int = 100) -> list[dict[str, Any]]:
-    return _query(
-        """
-        SELECT n.id, n.state, n.vacancy_id, n.created_at, n.updated_at,
-               v.name AS vacancy_name, v.alternate_url, v.area_name,
-               v.salary_from, v.salary_to, v.currency,
-               e.name AS employer_name
-        FROM negotiations n
-        LEFT JOIN vacancies v ON v.id = n.vacancy_id
-        LEFT JOIN employers e ON e.id = n.employer_id
-        ORDER BY n.created_at DESC
-        LIMIT ?
-        """,
-        (limit,),
-    )
+    raw = _fetch_negotiations_raw()
+    if raw is None:
+        return []
+    result = []
+    for n in raw[:limit]:
+        vacancy = n.get("vacancy") or {}
+        salary = vacancy.get("salary") or {}
+        result.append(
+            {
+                "id": n.get("id"),
+                "state": (n.get("state") or {}).get("id"),
+                "vacancy_id": vacancy.get("id"),
+                "vacancy_name": vacancy.get("name"),
+                "alternate_url": vacancy.get("alternate_url"),
+                "area_name": (vacancy.get("area") or {}).get("name"),
+                "salary_from": salary.get("from"),
+                "salary_to": salary.get("to"),
+                "currency": salary.get("currency"),
+                "employer_name": (vacancy.get("employer") or {}).get("name"),
+                "created_at": n.get("created_at"),
+                "updated_at": n.get("updated_at"),
+            }
+        )
+    return result
 
 
 def fetch_skipped(limit: int = 100) -> list[dict[str, Any]]:
@@ -135,13 +187,19 @@ def fetch_stats() -> dict[str, Any]:
         rows = _query(sql)
         return list(rows[0].values())[0] if rows else 0
 
+    today = total = 0
+    raw = _fetch_negotiations_raw()
+    if raw is not None:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        today = sum(
+            1 for n in raw if (n.get("created_at") or "").startswith(today_str)
+        )
+        total = len(raw)
+
     return {
-        "today": scalar(
-            "SELECT COUNT(*) FROM negotiations "
-            "WHERE date(created_at, 'localtime') = date('now', 'localtime')"
-        ),
+        "today": today,
         "daily_limit": DAILY_LIMIT,
-        "total": scalar("SELECT COUNT(*) FROM negotiations"),
+        "total": total,
         "skipped": scalar("SELECT COUNT(*) FROM skipped_vacancies"),
         "vacancies": scalar("SELECT COUNT(*) FROM vacancies"),
         "employers": scalar("SELECT COUNT(*) FROM employers"),

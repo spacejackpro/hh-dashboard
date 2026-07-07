@@ -36,8 +36,10 @@ def build_argv(op: str, params: dict[str, Any]) -> list[str]:
             argv += ["--salary", str(int(params["salary"]))]
         if params.get("only_with_salary"):
             argv.append("--only-with-salary")
-        if params.get("max_responses"):
-            argv += ["--max-responses", str(int(params["max_responses"]))]
+        # ВНИМАНИЕ: --max-responses движку не передаём — у автора это
+        # нереализованная заглушка с другим смыслом. Лимит откликов
+        # обеспечивает Runner: считает строки «Отправили отклик» в логе
+        # и останавливает процесс (см. _pump).
         if params.get("skip_tests"):
             argv.append("--skip-tests")
         if params.get("dry_run"):
@@ -59,6 +61,9 @@ class Runner:
         self.lines: list[str] = []
         self.label: str | None = None
         self.returncode: int | None = None
+        self._response_limit: int | None = None
+        self._response_count = 0
+        self._stop_reason: str | None = None
 
     @property
     def running(self) -> bool:
@@ -72,6 +77,14 @@ class Runner:
         self.lines = [f"$ {' '.join(argv[1:])}"]
         self.label = op
         self.returncode = None
+        self._response_count = 0
+        self._stop_reason = None
+        self._response_limit = None
+        if op == "apply":
+            try:
+                self._response_limit = int(params.get("max_responses") or 0) or None
+            except (TypeError, ValueError):
+                self._response_limit = None
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
@@ -89,18 +102,36 @@ class Runner:
     async def _pump(self) -> None:
         assert self._proc and self._proc.stdout
         async for raw in self._proc.stdout:
-            line = raw.decode("utf-8", errors="replace").rstrip()
-            self.lines.append(ANSI_RE.sub("", line))
+            line = ANSI_RE.sub(
+                "", raw.decode("utf-8", errors="replace").rstrip()
+            )
+            self.lines.append(line)
+            if (
+                self._response_limit
+                and self._stop_reason is None
+                and "Отправили отклик" in line
+            ):
+                self._response_count += 1
+                if self._response_count >= self._response_limit:
+                    self._stop_reason = (
+                        f"лимит {self._response_limit} откликов достигнут"
+                    )
+                    self.lines.append(
+                        f"--- {self._stop_reason}, останавливаю рассылку ---"
+                    )
+                    self._proc.terminate()
         self.returncode = await self._proc.wait()
-        self.lines.append(
-            f"--- завершено (код {self.returncode}) ---"
-            if self.returncode == 0
-            else f"--- ошибка (код {self.returncode}) ---"
-        )
+        if self._stop_reason:
+            self.lines.append(f"--- остановлено: {self._stop_reason} ---")
+        elif self.returncode == 0:
+            self.lines.append("--- завершено (код 0) ---")
+        else:
+            self.lines.append(f"--- ошибка (код {self.returncode}) ---")
 
     def cancel(self) -> bool:
         if not self.running:
             return False
+        self._stop_reason = "по кнопке «Остановить»"
         self._proc.terminate()
         return True
 
