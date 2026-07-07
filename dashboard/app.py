@@ -107,6 +107,14 @@ class RunRequest(BaseModel):
     params: dict = {}
 
 
+@app.post("/api/preview")
+def preview(req: RunRequest) -> dict:
+    try:
+        return hh.preview_apply(req.params)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.post("/api/run")
 async def run(req: RunRequest) -> dict:
     try:

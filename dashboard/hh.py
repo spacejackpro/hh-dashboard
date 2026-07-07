@@ -221,6 +221,80 @@ def _make_tool():
     return tool
 
 
+def preview_apply(params: dict[str, Any]) -> dict[str, Any]:
+    """Прикидка для «пробного запуска»: кого бы выбрала рассылка.
+
+    Движок в --dry-run молчит (его сообщения — на уровне DEBUG), поэтому
+    предпросмотр делаем сами: ищем вакансии тем же фильтром и сверяем
+    с прошлыми откликами и списком пропущенных.
+    """
+    try:
+        limit = int(params.get("max_responses") or 0) or 10
+    except (TypeError, ValueError):
+        limit = 10
+
+    tool = _make_tool()
+    query: dict[str, Any] = {"page": 0, "per_page": 50}
+    if params.get("search"):
+        query["text"] = str(params["search"])
+    if params.get("salary"):
+        query["salary"] = int(params["salary"])
+    if params.get("only_with_salary"):
+        query["only_with_salary"] = "true"
+    r = tool.api_client.get("/vacancies", **query)
+    tool.save_token()
+
+    applied_ids = set()
+    for n in _fetch_negotiations_raw() or []:
+        vid = (n.get("vacancy") or {}).get("id")
+        if vid:
+            applied_ids.add(str(vid))
+    skipped_ids = {
+        str(row["vacancy_id"])
+        for row in _query("SELECT vacancy_id FROM skipped_vacancies")
+    }
+
+    items = []
+    would_apply = 0
+    for v in r.get("items", []):
+        vid = str(v.get("id"))
+        salary = v.get("salary") or {}
+        verdict: str = "apply"
+        reason: str | None = None
+        if vid in applied_ids or v.get("relations"):
+            verdict, reason = "skip", "уже откликались"
+        elif v.get("archived"):
+            verdict, reason = "skip", "вакансия в архиве"
+        elif params.get("skip_tests") and v.get("has_test"):
+            verdict, reason = "skip", "вакансия с тестом"
+        elif vid in skipped_ids:
+            verdict, reason = "skip", "утилита уже пропускала её раньше"
+        elif would_apply >= limit:
+            verdict, reason = "over_limit", "не влезает в лимит"
+        if verdict == "apply":
+            would_apply += 1
+        items.append(
+            {
+                "verdict": verdict,
+                "reason": reason,
+                "name": v.get("name"),
+                "employer": (v.get("employer") or {}).get("name"),
+                "salary_from": salary.get("from"),
+                "salary_to": salary.get("to"),
+                "currency": salary.get("currency"),
+                "url": v.get("alternate_url"),
+            }
+        )
+
+    return {
+        "found": r.get("found", 0),
+        "shown": len(items),
+        "would_apply": would_apply,
+        "limit": limit,
+        "items": items,
+    }
+
+
 def clear_local_auth() -> None:
     """Убирает токен из config.json и куки — локальная часть выхода."""
     cfg = read_config()

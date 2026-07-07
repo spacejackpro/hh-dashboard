@@ -226,18 +226,60 @@ $("#login-btn").addEventListener("click", async () => {
   }
 });
 
+const fmtSalary = (it) => {
+  if (!it.salary_from && !it.salary_to) return "з/п не указана";
+  const f = (n) => Number(n).toLocaleString("ru-RU");
+  const cur = it.currency || "";
+  if (it.salary_from && it.salary_to) return `${f(it.salary_from)}–${f(it.salary_to)} ${cur}`;
+  return (it.salary_from ? `от ${f(it.salary_from)}` : `до ${f(it.salary_to)}`) + ` ${cur}`;
+};
+
+async function runPreview(params) {
+  logEl.textContent = "Пробный запуск: спрашиваю hh.ru, кого бы выбрала рассылка…";
+  try {
+    const p = await api("/api/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "apply", params }),
+    });
+    const lines = [
+      `Найдено по фильтру: ${p.found} вакансий (показываю первые ${p.shown}).`,
+      `Реальная рассылка отправила бы откликов: ${p.would_apply} (твой лимит: ${p.limit}).`,
+      "",
+    ];
+    for (const it of p.items) {
+      const base = `${it.name} — ${it.employer ?? "?"} (${fmtSalary(it)})`;
+      if (it.verdict === "apply") lines.push(`[ ДА ] ${base}\n       ${it.url}`);
+      else if (it.verdict === "over_limit") lines.push(`[ -- ] ${base} — не влезает в лимит`);
+      else lines.push(`[ НЕТ ] ${base} — ${it.reason}`);
+    }
+    lines.push(
+      "",
+      "Это прикидка без отправки чего-либо. Реальная рассылка может отсеять ещё немного",
+      "(чёрный список работодателей и т.п.). Готов? Сними галочку «Пробный запуск» и жми ещё раз."
+    );
+    logEl.textContent = lines.join("\n");
+  } catch (e) {
+    logEl.textContent = "Ошибка пробного запуска: " + e.message;
+  }
+}
+
 $("#apply-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const f = e.target;
-  startOp("apply", {
+  const params = {
     resume_id: f.resume_id.value || null,
     search: f.search.value.trim(),
     salary: f.salary.value || null,
     max_responses: f.max_responses.value || null,
     only_with_salary: f.only_with_salary.checked,
     skip_tests: f.skip_tests.checked,
-    dry_run: f.dry_run.checked,
-  });
+  };
+  if (f.dry_run.checked) {
+    runPreview(params);
+  } else {
+    startOp("apply", params);
+  }
 });
 
 $("#update-btn").addEventListener("click", () => startOp("update"));
