@@ -9,15 +9,12 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from pathlib import Path
 from typing import Any
 
-ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-
 from .hh import LETTER_FILE
+from .paths import HH_TOOL_EXE
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-HH_TOOL_EXE = PROJECT_DIR / ".venv" / "Scripts" / "hh-applicant-tool.exe"
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def build_argv(op: str, params: dict[str, Any]) -> list[str]:

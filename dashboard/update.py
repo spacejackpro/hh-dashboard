@@ -93,11 +93,13 @@ def start_update() -> None:
 def _do_update() -> None:
     """Скачивает свежий код с GitHub, копирует поверх и перезапускает сервер.
 
-    Обновление движка (pip install -U) делает dashboard.cmd после
-    перезапуска — пока сервер работает, pip не может заменить занятые файлы.
-    dashboard.cmd не трогаем: перезаписывать выполняющийся батник опасно,
-    его обновляет только update.cmd.
+    Обновление движка (pip install -U) делает лаунчер после перезапуска —
+    пока сервер работает, pip не может заменить занятые файлы. Сам лаунчер
+    (dashboard.cmd / dashboard.command) не трогаем: перезаписывать
+    выполняющийся скрипт опасно, его обновляет только update.cmd/.command.
     """
+    # запущенный лаунчер не перезаписываем — обе ОС
+    keep = {"dashboard.cmd", "dashboard.command"}
     try:
         tmp = Path(tempfile.mkdtemp(prefix="hhdash-update-"))
         zip_path = tmp / "src.zip"
@@ -111,7 +113,7 @@ def _do_update() -> None:
 
         for item in src.rglob("*"):
             rel = item.relative_to(src)
-            if len(rel.parts) == 1 and rel.name == "dashboard.cmd":
+            if len(rel.parts) == 1 and rel.name in keep:
                 continue
             dest = PROJECT_DIR / rel
             if item.is_dir():

@@ -7,17 +7,13 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
-CONFIG_DIR = (
-    Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming"))
-    / "hh-applicant-tool"
-)
+from .paths import CONFIG_DIR
+
 CONFIG_FILE = CONFIG_DIR / "config.json"
 DB_FILE = CONFIG_DIR / "data"
 

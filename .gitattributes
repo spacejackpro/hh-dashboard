@@ -1,0 +1,5 @@
+# Маковские лаунчеры и shell-скрипты — всегда LF, иначе bash ругается на \r
+*.command text eol=lf
+*.sh text eol=lf
+# Виндовые батники — CRLF
+*.cmd text eol=crlf
