@@ -14,6 +14,8 @@ from typing import Any
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
+from .hh import LETTER_FILE
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 HH_TOOL_EXE = PROJECT_DIR / ".venv" / "Scripts" / "hh-applicant-tool.exe"
 
@@ -36,6 +38,10 @@ def build_argv(op: str, params: dict[str, Any]) -> list[str]:
             argv += ["--salary", str(int(params["salary"]))]
         if params.get("only_with_salary"):
             argv.append("--only-with-salary")
+        if LETTER_FILE.exists():
+            argv += ["--letter-file", str(LETTER_FILE)]
+        if params.get("force_message"):
+            argv.append("--force-message")
         # ВНИМАНИЕ: --max-responses движку не передаём — у автора это
         # нереализованная заглушка с другим смыслом. Лимит откликов
         # обеспечивает Runner: считает строки «Отправили отклик» в логе

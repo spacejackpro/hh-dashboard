@@ -23,6 +23,36 @@ DB_FILE = CONFIG_DIR / "data"
 
 DAILY_LIMIT = 200  # лимит откликов hh.ru в сутки
 
+# письмо храним рядом с данными утилиты — переживает обновления кода
+LETTER_FILE = CONFIG_DIR / "letter.txt"
+# копия дефолтного шаблона движка (Operation.cover_letter в apply_vacancies)
+DEFAULT_LETTER = (
+    "{Здравствуйте|Добрый день}, меня зовут %(first_name)s. "
+    "{Прошу|Предлагаю} рассмотреть {мою кандидатуру|мое резюме "
+    "«%(resume_title)s»} на вакансию «%(vacancy_name)s». "
+    "С уважением, %(first_name)s."
+)
+
+
+def get_letter() -> dict[str, Any]:
+    if LETTER_FILE.exists():
+        text = LETTER_FILE.read_text(encoding="utf-8", errors="replace").strip()
+        if text:
+            return {"text": text, "is_default": False}
+    return {"text": DEFAULT_LETTER, "is_default": True}
+
+
+def save_letter(text: str) -> dict[str, Any]:
+    text = (text or "").strip()
+    if not text or text == DEFAULT_LETTER:
+        # пустое поле или дефолт — файл не нужен, движок возьмёт свой шаблон
+        if LETTER_FILE.exists():
+            LETTER_FILE.unlink()
+        return {"text": DEFAULT_LETTER, "is_default": True}
+    LETTER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LETTER_FILE.write_text(text, encoding="utf-8")
+    return {"text": text, "is_default": False}
+
 
 def read_config() -> dict[str, Any]:
     if not CONFIG_FILE.exists():

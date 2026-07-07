@@ -83,6 +83,18 @@
           <label>Максимум откликов за запуск
             <input name="max_responses" type="number" min="1" max="200" value="10">
           </label>
+          <label>Сопроводительное письмо
+            <textarea name="letter" rows="5" spellcheck="false"></textarea>
+          </label>
+          <div class="hint">
+            Подстановки: <code>%(vacancy_name)s</code> — название вакансии,
+            <code>%(employer_name)s</code> — компания,
+            <code>%(first_name)s</code> — твоё имя,
+            <code>%(resume_title)s</code> — название резюме.
+            Конструкция <code>{Вариант 1|Вариант 2}</code> подставит случайный из вариантов.
+            Письмо сохраняется автоматически при запуске.
+          </div>
+          <label class="check"><input name="force_message" type="checkbox"> Отправлять письмо всем (а не только там, где оно обязательно)</label>
           <label class="check"><input name="only_with_salary" type="checkbox"> Только с указанной зарплатой</label>
           <label class="check"><input name="skip_tests" type="checkbox" checked> Пропускать вакансии с тестами</label>
           <label class="check"><input name="dry_run" type="checkbox" checked> Пробный запуск (без реальных откликов)</label>

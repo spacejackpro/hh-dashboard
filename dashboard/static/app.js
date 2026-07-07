@@ -85,6 +85,14 @@ async function loadStatus() {
   }
 }
 
+async function loadLetter() {
+  try {
+    const l = await api("/api/letter");
+    const ta = document.querySelector('#apply-form textarea[name="letter"]');
+    if (!ta.value) ta.value = l.text;
+  } catch { /* поле останется пустым — движок возьмёт свой шаблон */ }
+}
+
 async function loadResumeOptions() {
   try {
     const sel = document.querySelector('#apply-form select[name="resume_id"]');
@@ -234,7 +242,18 @@ const fmtSalary = (it) => {
   return (it.salary_from ? `от ${f(it.salary_from)}` : `до ${f(it.salary_to)}`) + ` ${cur}`;
 };
 
-async function runPreview(params) {
+function renderLetterSample(template, vacancy, resumeTitle) {
+  const firstName = (userName || "").split(" ")[0] || "";
+  return template
+    .replace(/\{([^{}|]*)\|[^{}]*\}/g, "$1")
+    .replaceAll("%(vacancy_name)s", vacancy.name ?? "")
+    .replaceAll("%(employer_name)s", vacancy.employer ?? "")
+    .replaceAll("%(first_name)s", firstName)
+    .replaceAll("%(resume_title)s", resumeTitle || "")
+    .replace(/%\([a-z_]+\)s/g, "…");
+}
+
+async function runPreview(params, letterText, resumeTitle) {
   logEl.textContent = "Пробный запуск: спрашиваю hh.ru, кого бы выбрала рассылка…";
   try {
     const p = await api("/api/preview", {
@@ -253,6 +272,16 @@ async function runPreview(params) {
       else if (it.verdict === "over_limit") lines.push(`[ -- ] ${base} — не влезает в лимит`);
       else lines.push(`[ НЕТ ] ${base} — ${it.reason}`);
     }
+    const firstApply = p.items.find((it) => it.verdict === "apply");
+    if (firstApply && letterText) {
+      lines.push(
+        "",
+        params.force_message
+          ? "Письмо уйдёт каждому. Пример для первой вакансии:"
+          : "Письмо уйдёт только там, где оно обязательно. Пример для первой вакансии:",
+        `«${renderLetterSample(letterText, firstApply, resumeTitle)}»`
+      );
+    }
     lines.push(
       "",
       "Это прикидка без отправки чего-либо. Реальная рассылка может отсеять ещё немного",
@@ -264,9 +293,18 @@ async function runPreview(params) {
   }
 }
 
-$("#apply-form").addEventListener("submit", (e) => {
+$("#apply-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target;
+  const letterText = f.letter.value.trim();
+  try {
+    // письмо сохраняется в файл — его же подхватит движок через --letter-file
+    await api("/api/letter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: letterText }),
+    });
+  } catch { /* не удалось сохранить — движок возьмёт прошлый вариант */ }
   const params = {
     resume_id: f.resume_id.value || null,
     search: f.search.value.trim(),
@@ -274,9 +312,11 @@ $("#apply-form").addEventListener("submit", (e) => {
     max_responses: f.max_responses.value || null,
     only_with_salary: f.only_with_salary.checked,
     skip_tests: f.skip_tests.checked,
+    force_message: f.force_message.checked,
   };
+  const resumeTitle = f.resume_id.selectedOptions[0]?.textContent || "";
   if (f.dry_run.checked) {
-    runPreview(params);
+    runPreview(params, letterText, resumeTitle);
   } else {
     startOp("apply", params);
   }
@@ -368,5 +408,6 @@ $("#logout-btn").addEventListener("click", async () => {
 loadStatus();
 loadOverview();
 loadResumeOptions();
+loadLetter();
 checkUpdate();
 setInterval(loadStatus, 30000);

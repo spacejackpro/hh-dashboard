@@ -106,6 +106,20 @@ def skipped(limit: int = 100) -> list:
     return hh.fetch_skipped(limit)
 
 
+class LetterRequest(BaseModel):
+    text: str = ""
+
+
+@app.get("/api/letter")
+def get_letter() -> dict:
+    return hh.get_letter()
+
+
+@app.post("/api/letter")
+def save_letter(req: LetterRequest) -> dict:
+    return hh.save_letter(req.text)
+
+
 class RunRequest(BaseModel):
     op: str
     params: dict = {}
