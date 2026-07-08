@@ -37,8 +37,17 @@
         <div>
           <b>Ты не авторизован на hh.ru.</b><br>
           <span id="auth-hint">Нажми кнопку — откроется окно браузера, где нужно войти в свой аккаунт как обычно (пароль или код из SMS).</span>
+          <br><a href="#" id="multi-login-link" class="link-quiet">У меня на этой почте два аккаунта: соискатель и работодатель</a>
         </div>
         <button class="btn primary" id="login-btn">Войти в hh.ru</button>
+      </div>
+      <div id="employer-banner" class="banner employer hidden">
+        <div>
+          <b>Ты вошёл как работодатель, а нужен аккаунт соискателя.</b><br>
+          <span>На твоей почте два аккаунта hh.ru. Приложение ищет вакансии и откликается — это умеет только соискатель.
+          Нажми кнопку: откроется hh.ru, там переключись на аккаунт соискателя, и приложение заберёт нужный доступ.</span>
+        </div>
+        <button class="btn primary" id="employer-relogin-btn">Войти как соискатель</button>
       </div>
       <div class="cards" id="stats-cards"></div>
       <h2>Резюме</h2>
@@ -118,6 +127,22 @@
       <pre id="log" class="log">— здесь появится вывод операции —</pre>
     </section>
   </main>
+
+  <div id="login-overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <div class="spinner" id="login-spinner"></div>
+      <b id="login-title">Открываю hh.ru…</b>
+      <span id="login-hint">Сейчас откроется окно браузера со страницей входа hh.ru.</span>
+      <ol class="steps" id="login-steps">
+        <li>Войди на hh.ru как обычно (пароль или код из SMS).</li>
+        <li>Если попал в аккаунт работодателя — переключись на <b>соискателя</b>
+            (меню профиля в правом верхнем углу).</li>
+        <li>Убедись, что видишь свои резюме, и вернись сюда.</li>
+      </ol>
+      <button class="btn primary" id="login-continue-btn" disabled>Я в аккаунте соискателя — продолжить</button>
+      <button class="btn" id="login-cancel-btn">Отмена</button>
+    </div>
+  </div>
 
   <div id="updating-overlay" class="overlay hidden">
     <div class="overlay-box">

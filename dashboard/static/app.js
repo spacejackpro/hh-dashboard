@@ -89,10 +89,12 @@ const dt = (s) => (s ? String(s).replace("T", " ").slice(0, 16) : "—");
 
 // ---------- Загрузка данных вкладок ----------
 let userName = null;
+let isEmployer = false;
 
 async function loadStatus() {
   const badge = $("#auth-badge");
   const banner = $("#auth-banner");
+  const employerBanner = $("#employer-banner");
   try {
     const { token } = await api("/api/status");
     const ok = token.authorized && !token.expired;
@@ -102,16 +104,21 @@ async function loadStatus() {
         try {
           const me = await api("/api/whoami");
           userName = [me.first_name, me.last_name].filter(Boolean).join(" ");
+          // на одной почте могут жить два аккаунта; нам нужен соискатель
+          isEmployer = !!me.is_employer && !me.is_applicant;
         } catch { /* API недоступен — покажем просто галочку */ }
       }
-      badge.textContent = "✓ " + (userName || "авторизован");
-      badge.className = "auth-badge ok";
+      employerBanner.classList.toggle("hidden", !isEmployer);
+      badge.textContent = (isEmployer ? "⚠ " : "✓ ") + (userName || "авторизован");
+      badge.className = "auth-badge " + (isEmployer ? "bad" : "ok");
     } else {
       userName = null;
+      isEmployer = false;
+      employerBanner.classList.add("hidden");
       badge.textContent = token.authorized ? "токен истёк — войди заново" : "не авторизован";
       badge.className = "auth-badge bad";
     }
-    return ok;
+    return ok && !isEmployer;
   } catch {
     badge.textContent = "сервер недоступен";
     badge.className = "auth-badge bad";
@@ -423,6 +430,78 @@ $("#do-update-btn").addEventListener("click", async () => {
     }
   }, 2000);
 });
+
+// ---------- Вход с паузой: для двух аккаунтов на одной почте ----------
+let loginPoll = null;
+
+async function startTwoStepLogin() {
+  const overlay = $("#login-overlay");
+  const continueBtn = $("#login-continue-btn");
+  const title = $("#login-title");
+  const hint = $("#login-hint");
+
+  overlay.classList.remove("hidden");
+  continueBtn.disabled = true;
+  title.textContent = "Открываю hh.ru…";
+  hint.textContent = "Сейчас откроется окно браузера со страницей входа hh.ru.";
+
+  try {
+    await api("/api/login/start", { method: "POST" });
+  } catch (e) {
+    overlay.classList.add("hidden");
+    alert("Не удалось начать вход: " + e.message);
+    return;
+  }
+
+  clearInterval(loginPoll);
+  loginPoll = setInterval(async () => {
+    let st;
+    try { st = await api("/api/login/status"); } catch { return; }
+
+    if (st.state === "waiting_user") {
+      title.textContent = "Жду тебя в окне hh.ru";
+      hint.textContent = "Когда окажешься в аккаунте соискателя — жми кнопку внизу.";
+      continueBtn.disabled = false;
+    } else if (st.state === "finishing") {
+      continueBtn.disabled = true;
+      title.textContent = "Забираю доступ…";
+      hint.textContent = "Секунду, сохраняю авторизацию.";
+    } else if (st.state === "done") {
+      clearInterval(loginPoll);
+      overlay.classList.add("hidden");
+      userName = null;
+      isEmployer = false;
+      await loadStatus();
+      loadOverview();
+      loadResumeOptions();
+    } else if (st.state === "error") {
+      clearInterval(loginPoll);
+      overlay.classList.add("hidden");
+      alert("Не получилось войти: " + (st.error || "неизвестная ошибка"));
+    }
+  }, 1000);
+}
+
+$("#login-continue-btn").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try {
+    await api("/api/login/continue", { method: "POST" });
+  } catch (err) {
+    alert("Ошибка: " + err.message);
+  }
+});
+
+$("#login-cancel-btn").addEventListener("click", async () => {
+  clearInterval(loginPoll);
+  $("#login-overlay").classList.add("hidden");
+  try { await api("/api/login/cancel", { method: "POST" }); } catch { /* уже закрылось */ }
+});
+
+$("#multi-login-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  startTwoStepLogin();
+});
+$("#employer-relogin-btn").addEventListener("click", startTwoStepLogin);
 
 $("#logout-btn").addEventListener("click", async () => {
   if (!confirm("Выйти из аккаунта hh.ru? Для работы придётся войти заново.")) return;

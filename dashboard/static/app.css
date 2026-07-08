@@ -227,7 +227,26 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 .banner span { color: var(--text-dim); font-size: 14px; }
 .banner.update { border-color: var(--warn); }
+.banner.employer { border-color: var(--warn); }
 .banner code { color: var(--warn); font-family: Consolas, monospace; }
+
+.link-quiet {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.link-quiet:hover { color: var(--accent-soft); }
+
+.steps {
+  margin: 4px 0;
+  padding-left: 20px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-dim);
+}
+.steps b { color: var(--text); }
 .banner .btn { flex-shrink: 0; }
 .hidden { display: none !important; }
 

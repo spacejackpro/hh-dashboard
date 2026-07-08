@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import hh
+from .login import login_flow
 from .runner import HH_TOOL_EXE, runner
 from .update import current_version, start_update, update_state, version_info
 
@@ -63,6 +64,36 @@ def update() -> dict:
 @app.get("/api/update/status")
 def update_status() -> dict:
     return update_state()
+
+
+@app.post("/api/login/start")
+async def login_start() -> dict:
+    if runner.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    try:
+        await login_flow.start()
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return {"started": True}
+
+
+@app.post("/api/login/continue")
+def login_continue() -> dict:
+    try:
+        login_flow.proceed()
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True}
+
+
+@app.post("/api/login/cancel")
+def login_cancel() -> dict:
+    return {"cancelled": login_flow.cancel()}
+
+
+@app.get("/api/login/status")
+def login_status() -> dict:
+    return login_flow.status()
 
 
 @app.post("/api/logout")
