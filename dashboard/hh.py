@@ -14,6 +14,17 @@ from typing import Any
 
 from .paths import CONFIG_DIR
 
+# hh-applicant-tool ходит к api.hh.ru без проверки SSL-сертификата (так у
+# автора), и urllib3 сыплет InsecureRequestWarning на каждый запрос. При
+# запуске через CLI утилита это предупреждение глушит сама; мы вызываем её
+# как библиотеку, поэтому глушим здесь — иначе консоль забивается шумом.
+try:
+    import urllib3
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except Exception:
+    pass
+
 CONFIG_FILE = CONFIG_DIR / "config.json"
 DB_FILE = CONFIG_DIR / "data"
 
