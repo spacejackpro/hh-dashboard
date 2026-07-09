@@ -146,7 +146,12 @@ async function loadResumeOptions() {
   } catch { /* без списка остаётся вариант по умолчанию */ }
 }
 
+const loading = (box, text = "Загружаю данные с hh.ru…") => {
+  box.innerHTML = `<div class="empty">${text}</div>`;
+};
+
 async function loadOverview(fresh = false) {
+  loading($("#resumes-box"));
   const stats = await api("/api/stats" + (fresh ? "?fresh=1" : ""));
   $("#stats-cards").innerHTML = `
     <div class="card limit">
@@ -166,6 +171,7 @@ async function loadOverview(fresh = false) {
 }
 
 async function loadNegotiations(fresh = false) {
+  loading($("#negotiations-box"), "Загружаю отклики с hh.ru…");
   renderTable($("#negotiations-box"), await api("/api/negotiations" + (fresh ? "?fresh=1" : "")), [
     { title: "Вакансия", render: (r) => link(r.alternate_url, r.vacancy_name ?? r.vacancy_id), sort: (r) => r.vacancy_name },
     { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—"), sort: (r) => r.employer_name },
@@ -177,6 +183,7 @@ async function loadNegotiations(fresh = false) {
 }
 
 async function loadSkipped() {
+  loading($("#skipped-box"));
   renderTable($("#skipped-box"), await api("/api/skipped"), [
     { title: "Вакансия", render: (r) => link(r.alternate_url, r.name ?? r.vacancy_id), sort: (r) => r.name },
     { title: "Работодатель", render: (r) => esc(r.employer_name ?? "—"), sort: (r) => r.employer_name },

@@ -283,11 +283,9 @@ def preview_apply(params: dict[str, Any]) -> dict[str, Any]:
     r = tool.api_client.get("/vacancies", **query)
     tool.save_token()
 
-    applied_ids = set()
-    for n in _fetch_negotiations_raw() or []:
-        vid = (n.get("vacancy") or {}).get("id")
-        if vid:
-            applied_ids.add(str(vid))
+    # признак «уже откликались» берём из самой вакансии (поле relations) —
+    # это избавляет от постраничной выкачки всех откликов, из-за которой
+    # пробный запуск подолгу висел на медленной сети
     skipped_ids = {
         str(row["vacancy_id"])
         for row in _query("SELECT vacancy_id FROM skipped_vacancies")
@@ -300,7 +298,7 @@ def preview_apply(params: dict[str, Any]) -> dict[str, Any]:
         salary = v.get("salary") or {}
         verdict: str = "apply"
         reason: str | None = None
-        if vid in applied_ids or v.get("relations"):
+        if v.get("relations"):
             verdict, reason = "skip", "уже откликались"
         elif v.get("archived"):
             verdict, reason = "skip", "вакансия в архиве"
