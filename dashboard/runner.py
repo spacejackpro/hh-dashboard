@@ -11,7 +11,7 @@ import os
 import re
 from typing import Any
 
-from .hh import LETTER_FILE
+from .hh import LETTER_FILE, build_search_text
 from .paths import HH_TOOL_EXE
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -29,8 +29,13 @@ def build_argv(op: str, params: dict[str, Any]) -> list[str]:
         argv.append("apply-vacancies")
         if params.get("resume_id"):
             argv += ["--resume-id", str(params["resume_id"])]
-        if params.get("search"):
-            argv += ["--search", str(params["search"])]
+        search = build_search_text(params.get("keywords") or [])
+        if search:
+            argv += ["--search", search]
+        if params.get("search_fields"):
+            argv += ["--search-field", *[str(f) for f in params["search_fields"]]]
+        if params.get("areas"):
+            argv += ["--area", *[str(a) for a in params["areas"]]]
         if params.get("salary"):
             argv += ["--salary", str(int(params["salary"]))]
         if params.get("only_with_salary"):

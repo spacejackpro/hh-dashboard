@@ -245,6 +245,104 @@ def fetch_stats(fresh: bool = False) -> dict[str, Any]:
     }
 
 
+# ---------- Справочник регионов hh.ru ----------
+# Справочник статичный и большой (16 тысяч записей), поэтому тянем его
+# один раз за запуск и ищем по нему на своей стороне.
+_AREAS_TTL = 24 * 3600
+_areas_cache: dict = {"at": 0.0, "items": None}
+
+
+def _areas_flat() -> list[dict[str, Any]]:
+    now = time.time()
+    if _areas_cache["items"] and now - _areas_cache["at"] < _AREAS_TTL:
+        return _areas_cache["items"]
+
+    flat: list[dict[str, Any]] = []
+
+    def walk(nodes: list, path: str) -> None:
+        for n in nodes:
+            flat.append(
+                {"id": str(n["id"]), "name": n["name"], "path": path}
+            )
+            children = n.get("areas") or []
+            if children:
+                walk(children, f"{path} / {n['name']}" if path else n["name"])
+
+    try:
+        tool = _make_tool()
+        walk(tool.api_client.get("/areas"), "")
+        tool.save_token()
+    except Exception:
+        return _areas_cache["items"] or []
+
+    _areas_cache.update(at=now, items=flat)
+    return flat
+
+
+def search_areas(query: str, limit: int = 20) -> list[dict[str, Any]]:
+    q = (query or "").strip().lower()
+    if not q:
+        # без запроса показываем страны и крупные регионы верхнего уровня
+        return [a for a in _areas_flat() if not a["path"]][:limit]
+    found = [a for a in _areas_flat() if q in a["name"].lower()]
+    # точные совпадения и начало названия — выше; короткий путь = крупнее
+    found.sort(
+        key=lambda a: (
+            a["name"].lower() != q,
+            not a["name"].lower().startswith(q),
+            a["path"].count("/"),
+            len(a["name"]),
+        )
+    )
+    return found[:limit]
+
+
+def build_search_text(keywords: list[str]) -> str:
+    """Собирает строку поиска hh.ru из нескольких ключевых слов.
+
+    Несколько ключей объединяются через OR; фразы с пробелами берутся в
+    кавычки, иначе hh.ru разберёт OR не по тем словам.
+    """
+    keys = [str(k).strip() for k in (keywords or []) if str(k).strip()]
+    if not keys:
+        return ""
+    if len(keys) == 1:
+        return keys[0]
+    return " OR ".join(f'"{k}"' if " " in k else k for k in keys)
+
+
+# ---------- Сохранённые фильтры (ключи, регионы, поля поиска) ----------
+PREFS_FILE = CONFIG_DIR / "dashboard-prefs.json"
+DEFAULT_PREFS: dict[str, Any] = {
+    "keywords": [],          # библиотека сохранённых ключевых слов
+    "selected_keywords": [],  # что было отмечено в прошлый раз
+    "areas": [],             # выбранные регионы: [{id, name}]
+    "search_fields": [],     # где искать: name / company_name / description
+}
+
+
+def get_prefs() -> dict[str, Any]:
+    prefs = dict(DEFAULT_PREFS)
+    if PREFS_FILE.exists():
+        try:
+            prefs.update(json.loads(PREFS_FILE.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return prefs
+
+
+def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
+    prefs = get_prefs()
+    for key in DEFAULT_PREFS:
+        if key in data:
+            prefs[key] = data[key]
+    PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PREFS_FILE.write_text(
+        json.dumps(prefs, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return prefs
+
+
 def _make_tool():
     """HHApplicantTool, готовый к использованию как библиотека.
 
@@ -274,8 +372,13 @@ def preview_apply(params: dict[str, Any]) -> dict[str, Any]:
 
     tool = _make_tool()
     query: dict[str, Any] = {"page": 0, "per_page": 50}
-    if params.get("search"):
-        query["text"] = str(params["search"])
+    search = build_search_text(params.get("keywords") or [])
+    if search:
+        query["text"] = search
+    if params.get("search_fields"):
+        query["search_field"] = list(params["search_fields"])
+    if params.get("areas"):
+        query["area"] = [str(a) for a in params["areas"]]
     if params.get("salary"):
         query["salary"] = int(params["salary"])
     if params.get("only_with_salary"):

@@ -134,6 +134,139 @@ async function loadLetter() {
   } catch { /* поле останется пустым — движок возьмёт свой шаблон */ }
 }
 
+// ---------- Фильтры поиска: ключевые слова, регионы, поля ----------
+let prefs = { keywords: [], selected_keywords: [], areas: [], search_fields: [] };
+let savePrefsTimer = null;
+
+function schedulePrefsSave() {
+  clearTimeout(savePrefsTimer);
+  savePrefsTimer = setTimeout(() => {
+    api("/api/prefs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prefs),
+    }).catch(() => { /* не сохранилось — не мешаем работе */ });
+  }, 400);
+}
+
+function renderKeywords() {
+  const box = $("#kw-list");
+  box.innerHTML = prefs.keywords
+    .map((k, i) => {
+      const on = prefs.selected_keywords.includes(k);
+      return `<span class="chip ${on ? "on" : ""}" data-kw="${i}">
+                <span class="dot"></span>${esc(k)}<span class="x" data-del="${i}">×</span>
+              </span>`;
+    })
+    .join("");
+  const n = prefs.selected_keywords.length;
+  $("#kw-count").textContent = n ? `— выбрано ${n}` : "— ничего не выбрано";
+
+  box.querySelectorAll("[data-kw]").forEach((chip) => {
+    chip.addEventListener("click", (e) => {
+      if (e.target.dataset.del !== undefined) return;
+      const k = prefs.keywords[Number(chip.dataset.kw)];
+      const at = prefs.selected_keywords.indexOf(k);
+      if (at === -1) prefs.selected_keywords.push(k);
+      else prefs.selected_keywords.splice(at, 1);
+      renderKeywords();
+      schedulePrefsSave();
+    });
+  });
+  box.querySelectorAll("[data-del]").forEach((x) => {
+    x.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const k = prefs.keywords[Number(x.dataset.del)];
+      prefs.keywords = prefs.keywords.filter((v) => v !== k);
+      prefs.selected_keywords = prefs.selected_keywords.filter((v) => v !== k);
+      renderKeywords();
+      schedulePrefsSave();
+    });
+  });
+}
+
+function addKeyword() {
+  const input = $("#kw-input");
+  const value = input.value.trim();
+  if (!value) return;
+  if (!prefs.keywords.includes(value)) prefs.keywords.push(value);
+  if (!prefs.selected_keywords.includes(value)) prefs.selected_keywords.push(value);
+  input.value = "";
+  renderKeywords();
+  schedulePrefsSave();
+}
+
+$("#kw-add").addEventListener("click", addKeyword);
+$("#kw-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); addKeyword(); }
+});
+
+function renderAreas() {
+  const box = $("#area-list");
+  box.innerHTML = prefs.areas
+    .map((a, i) => `<span class="chip on">${esc(a.name)}<span class="x" data-area="${i}">×</span></span>`)
+    .join("");
+  box.querySelectorAll("[data-area]").forEach((x) => {
+    x.addEventListener("click", () => {
+      prefs.areas.splice(Number(x.dataset.area), 1);
+      renderAreas();
+      schedulePrefsSave();
+    });
+  });
+}
+
+let areaSearchTimer = null;
+$("#area-input").addEventListener("input", (e) => {
+  clearTimeout(areaSearchTimer);
+  const q = e.target.value.trim();
+  areaSearchTimer = setTimeout(async () => {
+    const menu = $("#area-results");
+    if (!q) { menu.classList.add("hidden"); return; }
+    let found;
+    try { found = await api("/api/areas?q=" + encodeURIComponent(q)); } catch { return; }
+    if (!found.length) { menu.classList.add("hidden"); return; }
+    menu.innerHTML = found
+      .map((a) => `<div data-id="${esc(a.id)}" data-name="${esc(a.name)}">${esc(a.name)}
+                     ${a.path ? `<span class="where">${esc(a.path)}</span>` : ""}</div>`)
+      .join("");
+    menu.classList.remove("hidden");
+    menu.querySelectorAll("[data-id]").forEach((row) => {
+      row.addEventListener("click", () => {
+        if (!prefs.areas.some((a) => a.id === row.dataset.id)) {
+          prefs.areas.push({ id: row.dataset.id, name: row.dataset.name });
+        }
+        $("#area-input").value = "";
+        menu.classList.add("hidden");
+        renderAreas();
+        schedulePrefsSave();
+      });
+    });
+  }, 250);
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".area-search")) $("#area-results").classList.add("hidden");
+});
+
+function searchFieldInputs() {
+  return [...document.querySelectorAll('#apply-form input[name^="sf_"]')];
+}
+
+async function loadPrefs() {
+  try {
+    prefs = { ...prefs, ...(await api("/api/prefs")) };
+  } catch { /* останутся пустые значения */ }
+  renderKeywords();
+  renderAreas();
+  searchFieldInputs().forEach((cb) => {
+    cb.checked = prefs.search_fields.includes(cb.value);
+    cb.addEventListener("change", () => {
+      prefs.search_fields = searchFieldInputs().filter((c) => c.checked).map((c) => c.value);
+      schedulePrefsSave();
+    });
+  });
+}
+
 async function loadResumeOptions() {
   try {
     const sel = document.querySelector('#apply-form select[name="resume_id"]');
@@ -309,7 +442,22 @@ async function runPreview(params, letterText, resumeTitle) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ op: "apply", params }),
     });
+    const fieldNames = {
+      name: "в названии вакансии",
+      company_name: "в названии компании",
+      description: "в описании",
+    };
     const lines = [
+      params.keywords.length
+        ? `Ключевые слова: ${params.keywords.join(" ИЛИ ")}`
+        : "Ключевые слова не выбраны — hh.ru отдаёт всё подряд (рассылка пойдёт по рекомендованным).",
+      `Где ищем: ${params.search_fields.length
+        ? params.search_fields.map((f) => fieldNames[f] || f).join(", ")
+        : "везде"}`,
+      `Города и страны: ${prefs.areas.length
+        ? prefs.areas.map((a) => a.name).join(", ")
+        : "везде"}`,
+      "",
       `Найдено по фильтру: ${p.found} вакансий (показываю первые ${p.shown}).`,
       `Реальная рассылка отправила бы откликов: ${p.would_apply} (твой лимит: ${p.limit}).`,
       "",
@@ -355,7 +503,9 @@ $("#apply-form").addEventListener("submit", async (e) => {
   } catch { /* не удалось сохранить — движок возьмёт прошлый вариант */ }
   const params = {
     resume_id: f.resume_id.value || null,
-    search: f.search.value.trim(),
+    keywords: prefs.selected_keywords,
+    search_fields: prefs.search_fields,
+    areas: prefs.areas.map((a) => a.id),
     salary: f.salary.value || null,
     max_responses: f.max_responses.value || null,
     only_with_salary: f.only_with_salary.checked,
@@ -529,5 +679,6 @@ loadStatus();
 loadOverview();
 loadResumeOptions();
 loadLetter();
+loadPrefs();
 checkUpdate();
 setInterval(loadStatus, 30000);

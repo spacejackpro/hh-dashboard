@@ -83,9 +83,37 @@
               <option value="">первое резюме (по умолчанию)</option>
             </select>
           </label>
-          <label>Поисковая фраза
-            <input name="search" placeholder="Например: Python разработчик">
-          </label>
+          <div class="field">
+            <div class="field-label">Ключевые слова <span class="muted" id="kw-count"></span></div>
+            <div class="add-row">
+              <input id="kw-input" placeholder="Например: CRM-аналитик" autocomplete="off">
+              <button type="button" class="btn" id="kw-add">Добавить</button>
+            </div>
+            <div id="kw-list" class="chip-list"></div>
+            <div class="hint">
+              Отмеченные слова ищутся вместе: вакансия подойдёт, если совпало
+              <b>любое</b> из них. Слова сохраняются — в следующий раз просто отметь нужные.
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Где искать эти слова</div>
+            <label class="check"><input type="checkbox" name="sf_name" value="name"> Только в названии вакансии</label>
+            <label class="check"><input type="checkbox" name="sf_company" value="company_name"> В названии компании</label>
+            <label class="check"><input type="checkbox" name="sf_description" value="description"> В описании вакансии</label>
+            <div class="hint">Ничего не отмечено — hh.ru ищет везде (как обычный поиск на сайте).</div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Города и страны</div>
+            <div class="add-row area-search">
+              <input id="area-input" placeholder="Начни вводить: Москва, Казань, Россия…" autocomplete="off">
+              <div id="area-results" class="dropdown hidden"></div>
+            </div>
+            <div id="area-list" class="chip-list"></div>
+            <div class="hint">Пусто — искать везде. Можно выбрать несколько городов или стран целиком.</div>
+          </div>
+
           <label>Мин. зарплата, ₽
             <input name="salary" type="number" min="0" step="5000" placeholder="не важно">
           </label>

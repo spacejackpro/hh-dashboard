@@ -137,6 +137,21 @@ def skipped(limit: int = 100) -> list:
     return hh.fetch_skipped(limit)
 
 
+@app.get("/api/areas")
+def areas(q: str = "", limit: int = 20) -> list:
+    return hh.search_areas(q, limit)
+
+
+@app.get("/api/prefs")
+def get_prefs() -> dict:
+    return hh.get_prefs()
+
+
+@app.post("/api/prefs")
+def save_prefs(data: dict) -> dict:
+    return hh.save_prefs(data)
+
+
 class LetterRequest(BaseModel):
     text: str = ""
 
