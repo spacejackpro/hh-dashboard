@@ -67,9 +67,29 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .auth-badge.bad { color: var(--accent-soft); }
 
 .version {
-  padding: 6px 12px 0;
+  padding: 6px 12px 4px;
   font-size: 12px;
   color: var(--text-dim);
+}
+
+.quit {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.quit:hover:not(:disabled) {
+  color: var(--accent-soft);
+  border-color: var(--accent-soft);
+}
+
+.overlay-box code {
+  padding: 1px 5px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent-soft);
+  background: var(--bg-hover);
+  border-radius: 4px;
 }
 
 .page-head {

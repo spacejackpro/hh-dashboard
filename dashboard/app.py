@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -135,6 +137,18 @@ def negotiations(limit: int = 100, fresh: bool = False) -> list:
 @app.get("/api/skipped")
 def skipped(limit: int = 100) -> list:
     return hh.fetch_skipped(limit)
+
+
+@app.post("/api/shutdown")
+def shutdown() -> dict:
+    """Гасит сервер — единственный способ выключить приложение,
+    когда оно запущено без окна (dashboard-hidden.vbs)."""
+    if runner.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    # даём ответу дойти до браузера и выходим кодом 0, чтобы лаунчер
+    # не принял это за перезапуск (перезапуск — код 42)
+    threading.Timer(0.7, lambda: os._exit(0)).start()
+    return {"ok": True}
 
 
 @app.get("/api/areas")

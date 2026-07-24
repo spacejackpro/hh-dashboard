@@ -18,6 +18,7 @@
     </nav>
     <div class="auth-badge" id="auth-badge">проверка…</div>
     <div class="version" id="app-version"></div>
+    <button class="btn quit" id="quit-btn">Выключить приложение</button>
   </aside>
 
   <main>
@@ -156,6 +157,14 @@
       <pre id="log" class="log">— здесь появится вывод операции —</pre>
     </section>
   </main>
+
+  <div id="quit-overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <b>Приложение выключено</b>
+      <span>Эту вкладку можно закрыть. Чтобы запустить снова — открой
+      <code>dashboard-hidden.vbs</code> в папке программы.</span>
+    </div>
+  </div>
 
   <div id="login-overlay" class="overlay hidden">
     <div class="overlay-box">

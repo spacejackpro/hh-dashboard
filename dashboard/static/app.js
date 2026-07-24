@@ -588,6 +588,18 @@ $("#do-update-btn").addEventListener("click", async () => {
   }, 2000);
 });
 
+$("#quit-btn").addEventListener("click", async () => {
+  if (!confirm("Выключить приложение? Сервер остановится, вкладку можно будет закрыть.")) return;
+  try {
+    await api("/api/shutdown", { method: "POST" });
+  } catch (e) {
+    alert("Не удалось выключить: " + e.message);
+    return;
+  }
+  clearInterval(statusTimer);
+  $("#quit-overlay").classList.remove("hidden");
+});
+
 // ---------- Вход с паузой: для двух аккаунтов на одной почте ----------
 let loginPoll = null;
 
@@ -681,4 +693,4 @@ loadResumeOptions();
 loadLetter();
 loadPrefs();
 checkUpdate();
-setInterval(loadStatus, 30000);
+const statusTimer = setInterval(loadStatus, 30000);

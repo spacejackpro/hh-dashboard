@@ -13,6 +13,13 @@ if not exist ".venv\Scripts\uvicorn.exe" (
     exit /b 1
 )
 
+rem Already running (e.g. launcher clicked twice)? Just open the browser.
+netstat -ano | findstr ":8517" | findstr "LISTENING" >nul 2>&1
+if not errorlevel 1 (
+    start "" http://127.0.0.1:8517
+    exit /b 0
+)
+
 start "" http://127.0.0.1:8517
 
 :run
