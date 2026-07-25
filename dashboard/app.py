@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import hh
+from . import hh, profiles
 from .login import login_flow
 from .runner import HH_TOOL_EXE, runner
 from .update import current_version, start_update, update_state, version_info
@@ -148,6 +148,47 @@ def shutdown() -> dict:
     # даём ответу дойти до браузера и выходим кодом 0, чтобы лаунчер
     # не принял это за перезапуск (перезапуск — код 42)
     threading.Timer(0.7, lambda: os._exit(0)).start()
+    return {"ok": True}
+
+
+@app.get("/api/profiles")
+def list_profiles() -> list:
+    return profiles.list_profiles()
+
+
+@app.post("/api/profiles/add")
+def add_profile() -> dict:
+    if runner.running or login_flow.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    try:
+        return profiles.add_profile()
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+class ProfileRef(BaseModel):
+    id: str
+
+
+@app.post("/api/profiles/switch")
+def switch_profile(ref: ProfileRef) -> dict:
+    if runner.running or login_flow.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    try:
+        profiles.switch_profile(ref.id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return {"ok": True}
+
+
+@app.post("/api/profiles/delete")
+def delete_profile(ref: ProfileRef) -> dict:
+    if runner.running or login_flow.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    try:
+        profiles.delete_profile(ref.id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
     return {"ok": True}
 
 

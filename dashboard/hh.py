@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from .paths import CONFIG_DIR
+from .paths import profile_dir
 
 # hh-applicant-tool ходит к api.hh.ru без проверки SSL-сертификата (так у
 # автора), и urllib3 сыплет InsecureRequestWarning на каждый запрос. При
@@ -25,13 +25,27 @@ try:
 except Exception:
     pass
 
-CONFIG_FILE = CONFIG_DIR / "config.json"
-DB_FILE = CONFIG_DIR / "data"
-
 DAILY_LIMIT = 200  # лимит откликов hh.ru в сутки
 
-# письмо храним рядом с данными утилиты — переживает обновления кода
-LETTER_FILE = CONFIG_DIR / "letter.txt"
+
+# Пути к данным зависят от активного профиля (мультиаккаунт), поэтому это
+# функции, а не константы: активный аккаунт может смениться в любой момент.
+def config_file():
+    return profile_dir() / "config.json"
+
+
+def db_file():
+    return profile_dir() / "data"
+
+
+def letter_file():
+    return profile_dir() / "letter.txt"
+
+
+def prefs_file():
+    return profile_dir() / "dashboard-prefs.json"
+
+
 # копия дефолтного шаблона движка (Operation.cover_letter в apply_vacancies)
 DEFAULT_LETTER = (
     "{Здравствуйте|Добрый день}, меня зовут %(first_name)s. "
@@ -42,30 +56,33 @@ DEFAULT_LETTER = (
 
 
 def get_letter() -> dict[str, Any]:
-    if LETTER_FILE.exists():
-        text = LETTER_FILE.read_text(encoding="utf-8", errors="replace").strip()
+    lf = letter_file()
+    if lf.exists():
+        text = lf.read_text(encoding="utf-8", errors="replace").strip()
         if text:
             return {"text": text, "is_default": False}
     return {"text": DEFAULT_LETTER, "is_default": True}
 
 
 def save_letter(text: str) -> dict[str, Any]:
+    lf = letter_file()
     text = (text or "").strip()
     if not text or text == DEFAULT_LETTER:
         # пустое поле или дефолт — файл не нужен, движок возьмёт свой шаблон
-        if LETTER_FILE.exists():
-            LETTER_FILE.unlink()
+        if lf.exists():
+            lf.unlink()
         return {"text": DEFAULT_LETTER, "is_default": True}
-    LETTER_FILE.parent.mkdir(parents=True, exist_ok=True)
-    LETTER_FILE.write_text(text, encoding="utf-8")
+    lf.parent.mkdir(parents=True, exist_ok=True)
+    lf.write_text(text, encoding="utf-8")
     return {"text": text, "is_default": False}
 
 
 def read_config() -> dict[str, Any]:
-    if not CONFIG_FILE.exists():
+    cf = config_file()
+    if not cf.exists():
         return {}
     try:
-        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        return json.loads(cf.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -83,20 +100,20 @@ def token_status() -> dict[str, Any]:
         "authorized": bool(token.get("access_token")),
         "expires_at": expires_iso,
         "expired": expired,
-        "config_dir": str(CONFIG_DIR),
-        "db_exists": DB_FILE.exists(),
+        "config_dir": str(profile_dir()),
+        "db_exists": db_file().exists(),
     }
 
 
 def _connect() -> sqlite3.Connection:
     # read-only, чтобы не мешать утилите и ничего случайно не испортить
-    conn = sqlite3.connect(f"file:{DB_FILE}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{db_file()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def _query(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-    if not DB_FILE.exists():
+    if not db_file().exists():
         return []
     with _connect() as conn:
         try:
@@ -312,7 +329,7 @@ def build_search_text(keywords: list[str]) -> str:
 
 
 # ---------- Сохранённые фильтры (ключи, регионы, поля поиска) ----------
-PREFS_FILE = CONFIG_DIR / "dashboard-prefs.json"
+# Фильтры у каждого аккаунта свои — файл лежит в папке профиля.
 DEFAULT_PREFS: dict[str, Any] = {
     "keywords": [],          # библиотека сохранённых ключевых слов
     "selected_keywords": [],  # что было отмечено в прошлый раз
@@ -323,9 +340,10 @@ DEFAULT_PREFS: dict[str, Any] = {
 
 def get_prefs() -> dict[str, Any]:
     prefs = dict(DEFAULT_PREFS)
-    if PREFS_FILE.exists():
+    pf = prefs_file()
+    if pf.exists():
         try:
-            prefs.update(json.loads(PREFS_FILE.read_text(encoding="utf-8")))
+            prefs.update(json.loads(pf.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError):
             pass
     return prefs
@@ -336,8 +354,9 @@ def save_prefs(data: dict[str, Any]) -> dict[str, Any]:
     for key in DEFAULT_PREFS:
         if key in data:
             prefs[key] = data[key]
-    PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PREFS_FILE.write_text(
+    pf = prefs_file()
+    pf.parent.mkdir(parents=True, exist_ok=True)
+    pf.write_text(
         json.dumps(prefs, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return prefs
@@ -353,8 +372,12 @@ def _make_tool():
     from hh_applicant_tool import HHApplicantTool
     from hh_applicant_tool.main import BaseNamespace
 
+    from .paths import profile_cli_id
+
+    # --profile-id направляет движок в папку активного аккаунта
+    argv = ["--profile-id", profile_cli_id()]
     tool = HHApplicantTool()
-    tool._assign_args(tool._parser.parse_args([], namespace=BaseNamespace()))
+    tool._assign_args(tool._parser.parse_args(argv, namespace=BaseNamespace()))
     return tool
 
 
@@ -440,11 +463,11 @@ def clear_local_auth() -> None:
     cfg = read_config()
     if "token" in cfg:
         cfg.pop("token")
-        CONFIG_FILE.write_text(
+        config_file().write_text(
             json.dumps(cfg, indent=2, sort_keys=True, ensure_ascii=False),
             encoding="utf-8",
         )
-    cookies = CONFIG_DIR / "cookies.txt"
+    cookies = profile_dir() / "cookies.txt"
     if cookies.exists():
         cookies.unlink()
 
@@ -454,4 +477,15 @@ def get_whoami() -> dict[str, Any]:
     tool = _make_tool()
     me = tool.get_me()
     tool.save_token()  # токен мог обновиться
+    # заодно подписываем активный профиль реальным именем аккаунта
+    name = " ".join(
+        str(me.get(k) or "").strip() for k in ("first_name", "last_name")
+    ).strip()
+    if name:
+        try:
+            from . import paths, profiles
+
+            profiles.set_label(paths.active_profile(), name)
+        except Exception:
+            pass
     return me

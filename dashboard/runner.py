@@ -11,15 +11,16 @@ import os
 import re
 from typing import Any
 
-from .hh import LETTER_FILE, build_search_text
-from .paths import HH_TOOL_EXE
+from .hh import build_search_text, letter_file
+from .paths import HH_TOOL_EXE, profile_cli_id
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def build_argv(op: str, params: dict[str, Any]) -> list[str]:
     """Собирает argv для CLI из параметров формы. Неизвестные операции — ошибка."""
-    argv = [str(HH_TOOL_EXE), "-v"]  # -v: INFO-логи, чтобы был виден прогресс
+    # -v: INFO-логи; --profile-id направляет операцию в папку активного аккаунта
+    argv = [str(HH_TOOL_EXE), "-v", "--profile-id", profile_cli_id()]
 
     if op == "authorize":
         # -m: пользователь входит сам в открывшемся окне браузера,
@@ -40,8 +41,8 @@ def build_argv(op: str, params: dict[str, Any]) -> list[str]:
             argv += ["--salary", str(int(params["salary"]))]
         if params.get("only_with_salary"):
             argv.append("--only-with-salary")
-        if LETTER_FILE.exists():
-            argv += ["--letter-file", str(LETTER_FILE)]
+        if letter_file().exists():
+            argv += ["--letter-file", str(letter_file())]
         if params.get("force_message"):
             argv.append("--force-message")
         # ВНИМАНИЕ: --max-responses движку не передаём — у автора это

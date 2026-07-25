@@ -397,6 +397,7 @@ $("#login-btn").addEventListener("click", async () => {
       hint.textContent = AUTH_HINT_DEFAULT;
       loadOverview();
       loadResumeOptions();
+      loadProfiles();
     } else {
       hint.textContent = "Похоже, вход не завершился. Попробуй ещё раз.";
     }
@@ -643,6 +644,7 @@ async function startTwoStepLogin() {
       await loadStatus();
       loadOverview();
       loadResumeOptions();
+      loadProfiles(); // подтянуть имя аккаунта в селектор
     } else if (st.state === "error") {
       clearInterval(loginPoll);
       overlay.classList.add("hidden");
@@ -686,8 +688,86 @@ $("#logout-btn").addEventListener("click", async () => {
   document.querySelector('.nav-btn[data-tab="overview"]').click();
 });
 
+// ---------- Аккаунты (мультиаккаунт) ----------
+function reloadForProfile() {
+  // при смене аккаунта всё содержимое перечитывается заново
+  userName = null;
+  isEmployer = false;
+  prefs = { keywords: [], selected_keywords: [], areas: [], search_fields: [] };
+  document.querySelector('#apply-form textarea[name="letter"]').value = "";
+  loadStatus();
+  loadOverview();
+  loadResumeOptions();
+  loadLetter();
+  loadPrefs();
+}
+
+async function loadProfiles() {
+  let list;
+  try { list = await api("/api/profiles"); } catch { return; }
+  const box = $("#profiles-list");
+  box.innerHTML = list
+    .map((p) => `
+      <div class="acc ${p.active ? "on" : ""}" data-id="${esc(p.id)}">
+        <span class="acc-dot"></span>
+        <span class="acc-name">${esc(p.label)}</span>
+        ${p.id !== "default" ? `<span class="acc-del" data-del="${esc(p.id)}" title="Удалить аккаунт">×</span>` : ""}
+      </div>`)
+    .join("");
+
+  $("#add-acc-btn").style.display = list.length >= 5 ? "none" : "";
+
+  box.querySelectorAll(".acc").forEach((el) => {
+    el.addEventListener("click", async (e) => {
+      if (e.target.dataset.del !== undefined) return;
+      const id = el.dataset.id;
+      if (el.classList.contains("on")) return;
+      try {
+        await api("/api/profiles/switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+      } catch (err) { alert("Не удалось переключить: " + err.message); return; }
+      await loadProfiles();
+      reloadForProfile();
+    });
+  });
+
+  box.querySelectorAll("[data-del]").forEach((x) => {
+    x.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm("Удалить этот аккаунт из приложения? Его вход и история сотрутся с этого компьютера (сам аккаунт на hh.ru не трогается).")) return;
+      try {
+        await api("/api/profiles/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: x.dataset.del }),
+        });
+      } catch (err) { alert("Не удалось удалить: " + err.message); return; }
+      await loadProfiles();
+      reloadForProfile();
+    });
+  });
+}
+
+$("#add-acc-btn").addEventListener("click", async () => {
+  try {
+    await api("/api/profiles/add", { method: "POST" });
+  } catch (err) { alert("Не удалось добавить аккаунт: " + err.message); return; }
+  await loadProfiles();
+  reloadForProfile();
+  // новый профиль пустой — сразу открываем вход в hh.ru
+  startTwoStepLogin();
+});
+
 // ---------- Старт ----------
-loadStatus();
+// loadStatus делает whoami и подписывает активный профиль именем аккаунта —
+// поэтому список профилей рисуем уже после него, чтобы показать имя сразу
+(async () => {
+  await loadStatus();
+  loadProfiles();
+})();
 loadOverview();
 loadResumeOptions();
 loadLetter();
