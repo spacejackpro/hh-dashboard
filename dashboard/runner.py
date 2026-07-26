@@ -91,14 +91,28 @@ class Runner:
         self._response_limit: int | None = None
         self._response_count = 0
         self._stop_reason: str | None = None
+        # своя рассылка (op == "apply") выполняется задачей, а не процессом
+        self._apply_task: asyncio.Task | None = None
+        self._cancel_flag = False
 
     @property
     def running(self) -> bool:
+        if self._apply_task is not None and not self._apply_task.done():
+            return True
         return self._proc is not None and self._proc.returncode is None
 
     async def start(self, op: str, params: dict[str, Any]) -> None:
         if self.running:
             raise RuntimeError("Операция уже выполняется")
+
+        # рассылку откликов ведём своим кодом — ради общего стоп-листа
+        if op == "apply":
+            self.lines = ["$ рассылка откликов"]
+            self.label = op
+            self.returncode = None
+            self._cancel_flag = False
+            self._apply_task = asyncio.create_task(self._run_apply(params))
+            return
 
         argv = build_argv(op, params)
         self.lines = [f"$ {' '.join(argv[1:])}"]
@@ -107,11 +121,6 @@ class Runner:
         self._response_count = 0
         self._stop_reason = None
         self._response_limit = None
-        if op == "apply":
-            try:
-                self._response_limit = int(params.get("max_responses") or 0) or None
-            except (TypeError, ValueError):
-                self._response_limit = None
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
@@ -161,9 +170,28 @@ class Runner:
         else:
             self.lines.append(f"--- ошибка (код {self.returncode}) ---")
 
+    async def _run_apply(self, params: dict[str, Any]) -> None:
+        from . import apply
+
+        try:
+            await apply.run_apply(
+                params,
+                emit=self.lines.append,
+                cancelled=lambda: self._cancel_flag,
+            )
+            self.returncode = 0
+        except Exception as e:
+            self.lines.append(f"--- ошибка рассылки: {e} ---")
+            self.returncode = 1
+
     def cancel(self) -> bool:
         if not self.running:
             return False
+        # своя рассылка останавливается флагом (проверяется в цикле),
+        # subprocess-операции — сигналом terminate
+        if self._apply_task is not None and not self._apply_task.done():
+            self._cancel_flag = True
+            return True
         self._stop_reason = "по кнопке «Остановить»"
         self._proc.terminate()
         return True

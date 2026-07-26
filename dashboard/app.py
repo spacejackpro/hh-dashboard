@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import hh, profiles
+from . import hh, profiles, stoplist
 from .login import login_flow
 from .runner import HH_TOOL_EXE, runner
 from .update import current_version, start_update, update_state, version_info
@@ -148,6 +148,19 @@ def shutdown() -> dict:
     # даём ответу дойти до браузера и выходим кодом 0, чтобы лаунчер
     # не принял это за перезапуск (перезапуск — код 42)
     threading.Timer(0.7, lambda: os._exit(0)).start()
+    return {"ok": True}
+
+
+@app.get("/api/stoplist")
+def get_stoplist() -> dict:
+    return {"count": stoplist.count(), "items": stoplist.items()}
+
+
+@app.post("/api/stoplist/clear")
+def clear_stoplist() -> dict:
+    if runner.running:
+        raise HTTPException(409, "Дождись окончания текущей операции")
+    stoplist.clear()
     return {"ok": True}
 
 

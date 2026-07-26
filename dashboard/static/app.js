@@ -325,14 +325,34 @@ async function loadSkipped() {
   ]);
 }
 
+async function loadStoplist() {
+  loading($("#stoplist-box"), "Загружаю стоп-лист…");
+  let data;
+  try { data = await api("/api/stoplist"); } catch { data = { items: [] }; }
+  renderTable($("#stoplist-box"), data.items, [
+    { title: "Вакансия", render: (r) => link(r.url, r.name || r.vacancy_id), sort: (r) => r.name },
+    { title: "Каким аккаунтом", render: (r) => esc(r.profile ?? "—"), sort: (r) => r.profile },
+    { title: "Когда", render: (r) => dt(r.at), sort: (r) => r.at },
+  ]);
+}
+
 function loadTab(tab) {
   ({
     overview: loadOverview,
     negotiations: loadNegotiations,
     skipped: loadSkipped,
+    stoplist: loadStoplist,
     run: loadResumeOptions,
   }[tab]?.() ?? null);
 }
+
+$("#stoplist-clear").addEventListener("click", async () => {
+  if (!confirm("Очистить весь стоп-лист? После этого аккаунты снова смогут откликаться на эти вакансии.")) return;
+  try {
+    await api("/api/stoplist/clear", { method: "POST" });
+  } catch (e) { alert("Не удалось очистить: " + e.message); return; }
+  loadStoplist();
+});
 
 // ---------- Запуск операций ----------
 const logEl = $("#log");
@@ -512,13 +532,11 @@ $("#apply-form").addEventListener("submit", async (e) => {
     only_with_salary: f.only_with_salary.checked,
     skip_tests: f.skip_tests.checked,
     force_message: f.force_message.checked,
+    dry_run: f.dry_run.checked,
   };
-  const resumeTitle = f.resume_id.selectedOptions[0]?.textContent || "";
-  if (f.dry_run.checked) {
-    runPreview(params, letterText, resumeTitle);
-  } else {
-    startOp("apply", params);
-  }
+  // и пробный, и реальный запуск идут одной рассылкой — различаются dry_run.
+  // так пробный тоже показывает общий стоп-лист (уже откликались с другого аккаунта)
+  startOp("apply", params);
 });
 
 $("#update-btn").addEventListener("click", () => startOp("update"));
@@ -545,6 +563,7 @@ document.querySelectorAll("[data-refresh]").forEach((btn) => {
       if (target === "overview") await loadOverview(true);
       else if (target === "negotiations") await loadNegotiations(true);
       else if (target === "skipped") await loadSkipped();
+      else if (target === "stoplist") await loadStoplist();
     } finally {
       btn.disabled = false;
       btn.textContent = "Обновить данные";
