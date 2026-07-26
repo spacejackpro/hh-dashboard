@@ -16,6 +16,24 @@ from .paths import HH_TOOL_EXE, profile_cli_id
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
+# признаки того, что не удалось достучаться до hh.ru (нет сети / нужен VPN)
+NETWORK_ERROR_MARKERS = (
+    "NameResolutionError",
+    "Failed to resolve",
+    "Max retries exceeded",
+    "Failed to establish a new connection",
+    "Connection refused",
+    "ConnectionError",
+    "Connection aborted",
+    "Read timed out",
+    "timed out",
+)
+NETWORK_HINT = (
+    "--- Похоже, нет связи с hh.ru. Проверь: открывается ли hh.ru в браузере? "
+    "Если нет — дело в интернете или (если ты не в России) нужен VPN. "
+    "Если открывается — просто запусти рассылку ещё раз. ---"
+)
+
 
 def build_argv(op: str, params: dict[str, Any]) -> list[str]:
     """Собирает argv для CLI из параметров формы. Неизвестные операции — ошибка."""
@@ -110,11 +128,17 @@ class Runner:
 
     async def _pump(self) -> None:
         assert self._proc and self._proc.stdout
+        network_hint_shown = False
         async for raw in self._proc.stdout:
             line = ANSI_RE.sub(
                 "", raw.decode("utf-8", errors="replace").rstrip()
             )
             self.lines.append(line)
+            if not network_hint_shown and any(
+                m in line for m in NETWORK_ERROR_MARKERS
+            ):
+                network_hint_shown = True
+                self.lines.append(NETWORK_HINT)
             if (
                 self._response_limit
                 and self._stop_reason is None
