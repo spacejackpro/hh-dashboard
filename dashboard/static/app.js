@@ -258,6 +258,14 @@ async function loadPrefs() {
   } catch { /* останутся пустые значения */ }
   renderKeywords();
   renderAreas();
+  const form = $("#apply-form");
+  ["delay_min", "delay_max"].forEach((name) => {
+    form[name].value = prefs[name] ?? form[name].value;
+    form[name].addEventListener("change", () => {
+      prefs[name] = Number(form[name].value) || 0;
+      schedulePrefsSave();
+    });
+  });
   searchFieldInputs().forEach((cb) => {
     cb.checked = prefs.search_fields.includes(cb.value);
     cb.addEventListener("change", () => {
@@ -529,6 +537,8 @@ $("#apply-form").addEventListener("submit", async (e) => {
     areas: prefs.areas.map((a) => a.id),
     salary: f.salary.value || null,
     max_responses: f.max_responses.value || null,
+    delay_min: f.delay_min.value,
+    delay_max: f.delay_max.value,
     only_with_salary: f.only_with_salary.checked,
     skip_tests: f.skip_tests.checked,
     force_message: f.force_message.checked,

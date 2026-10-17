@@ -153,6 +153,18 @@
           <label>Максимум откликов за запуск
             <input name="max_responses" type="number" min="1" max="200" value="10">
           </label>
+          <div class="delay-row">
+            <label>Пауза между откликами, от (сек)
+              <input name="delay_min" type="number" min="0" max="600" value="30">
+            </label>
+            <label>до (сек)
+              <input name="delay_max" type="number" min="0" max="600" value="90">
+            </label>
+          </div>
+          <div class="hint">
+            Каждый раз берётся случайное число в этих пределах — так отклики похожи на живого человека,
+            и hh.ru реже просит капчу. Если капча всё равно частая — увеличь паузу.
+          </div>
           <label>Сопроводительное письмо
             <textarea name="letter" rows="5" spellcheck="false"></textarea>
           </label>

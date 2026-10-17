@@ -48,6 +48,7 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
         limit = int(params.get("max_responses") or 0) or 10
     except (TypeError, ValueError):
         limit = 10
+    delay_min, delay_max = _delay_range(params)
 
     tool = await asyncio.to_thread(_make_tool)
     api = tool.api_client
@@ -95,6 +96,8 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
     emit(f"Аккаунт: {label}. Резюме: {resume.get('title')}.")
     emit(f"Поиск: {search or 'рекомендованные вакансии'}. Лимит: {limit}."
          + ("  [ПРОБНЫЙ ЗАПУСК — ничего не отправляется]" if dry else ""))
+    if not dry:
+        emit(f"Пауза между откликами: {delay_min}–{delay_max} с.")
     emit("")
 
     applied = 0
@@ -164,6 +167,7 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
                         stopped = True
                         break
                     emit("Капча принята, продолжаю.")
+                    await _pause(delay_min, delay_max, emit, cancelled)
                     # повтор той же вакансии; новая капча сразу — значит не помогло
                     await asyncio.to_thread(_apply, api, resume_id, vid, letter)
             except CaptchaRequired:
@@ -185,6 +189,8 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
             stoplist.add(vid, label, name, url)
             stop_ids.add(vid)
             emit(f"[ отклик {applied}/{limit} ] {tag}\n    {url}")
+            if applied < limit:
+                await _pause(delay_min, delay_max, emit, cancelled)
 
         if stopped:
             break
@@ -201,7 +207,31 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
     return applied
 
 
-CAPTCHA_DONE_URL = "https://hh.ru/"
+def _delay_range(params: dict[str, Any]) -> tuple[int, int]:
+    def num(key: str, default: int) -> int:
+        try:
+            return max(0, min(600, int(params.get(key))))
+        except (TypeError, ValueError):
+            return default
+
+    lo, hi = num("delay_min", 30), num("delay_max", 90)
+    return min(lo, hi), max(lo, hi)
+
+
+async def _pause(lo: int, hi: int, emit: Emit, cancelled: Cancelled) -> None:
+    """Случайная пауза между откликами: ровный быстрый темп — признак бота,
+    и hh.ru отвечает на него капчей. Ждём по секунде, чтобы «Стоп» срабатывал сразу."""
+    if hi <= 0:
+        return
+    secs = round(random.uniform(lo, hi))
+    emit(f"    пауза {secs} с…")
+    for _ in range(secs):
+        if cancelled():
+            return
+        await asyncio.sleep(1)
+
+
+CAPTCHA_DONE_URL ="https://hh.ru/"
 CAPTCHA_TIMEOUT = 300  # секунд на ввод
 
 

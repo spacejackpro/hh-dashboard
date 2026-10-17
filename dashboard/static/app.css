@@ -474,3 +474,10 @@ label.check input { accent-color: var(--accent); }
   border: 1px solid var(--border);
   border-radius: 12px;
 }
+
+/* ---------- Пауза между откликами: два поля в строку ---------- */
+.delay-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}

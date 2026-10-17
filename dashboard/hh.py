@@ -335,6 +335,8 @@ DEFAULT_PREFS: dict[str, Any] = {
     "selected_keywords": [],  # что было отмечено в прошлый раз
     "areas": [],             # выбранные регионы: [{id, name}]
     "search_fields": [],     # где искать: name / company_name / description
+    "delay_min": 30,         # пауза между откликами, сек — чтобы hh.ru не сыпал капчей
+    "delay_max": 90,
 }
 
 
