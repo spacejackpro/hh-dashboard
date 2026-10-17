@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import random
 from typing import Any, Callable
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from hh_applicant_tool.api.errors import (
     CaptchaRequired,
@@ -99,7 +100,8 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
     applied = 0
     page = 0
     letter_shown = False
-    while applied < limit:
+    stopped = False
+    while applied < limit and not stopped:
         if cancelled():
             emit("--- остановлено пользователем ---")
             break
@@ -148,14 +150,31 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
                 continue
 
             try:
-                await asyncio.to_thread(_apply, api, resume_id, vid, letter)
+                try:
+                    await asyncio.to_thread(_apply, api, resume_id, vid, letter)
+                except CaptchaRequired as ex:
+                    # пока капча не решена, hh.ru отвергает ВСЕ отклики подряд —
+                    # пропускать бессмысленно, только злим антибот
+                    emit(f"[ капча ] {tag}")
+                    emit("hh.ru просит капчу. Открываю окно браузера — введи "
+                         "символы с картинки, окно закроется само (до 5 минут).")
+                    if not await solve_captcha(ex.captcha_url, cancelled):
+                        emit("--- капча не введена — рассылка остановлена. "
+                             "Запусти заново, когда будешь у компьютера ---")
+                        stopped = True
+                        break
+                    emit("Капча принята, продолжаю.")
+                    # повтор той же вакансии; новая капча сразу — значит не помогло
+                    await asyncio.to_thread(_apply, api, resume_id, vid, letter)
+            except CaptchaRequired:
+                emit("--- hh.ru снова просит капчу — рассылка остановлена. "
+                     "Подожди полчаса-час и запусти заново ---")
+                stopped = True
+                break
             except LimitExceeded:
                 emit("--- достигнут дневной лимит откликов hh.ru (200) ---")
                 applied = limit
                 break
-            except CaptchaRequired:
-                emit(f"[ пропуск: капча ] {tag}")
-                continue
             except Redirect:
                 continue
             except Exception as e:
@@ -167,6 +186,8 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
             stop_ids.add(vid)
             emit(f"[ отклик {applied}/{limit} ] {tag}\n    {url}")
 
+        if stopped:
+            break
         page += 1
         if page >= r.get("pages", 0):
             break
@@ -178,6 +199,53 @@ async def run_apply(params: dict[str, Any], emit: Emit, cancelled: Cancelled) ->
     else:
         emit(f"Готово. Отправлено откликов с аккаунта «{label}»: {applied}.")
     return applied
+
+
+CAPTCHA_DONE_URL = "https://hh.ru/"
+CAPTCHA_TIMEOUT = 300  # секунд на ввод
+
+
+async def solve_captcha(captcha_url: str | None, cancelled: Cancelled) -> bool:
+    """Показывает капчу человеку в видимом окне браузера.
+
+    Движок решает её через ИИ (нужен ключ OpenAI), у нас ключа нет — поэтому
+    вводит человек. Движок решает её в чистом браузере без кук — значит,
+    капча привязана к самой ссылке. После ввода hh.ru уводит на backurl — по
+    уходу со страницы капчи и понимаем, что готово.
+    """
+    if not captcha_url:
+        return False
+    from playwright.async_api import async_playwright
+
+    parts = urlsplit(captcha_url)
+    query = parse_qs(parts.query)
+    if "backurl" not in query:
+        query["backurl"] = [CAPTCHA_DONE_URL]
+    url = urlunsplit(parts._replace(query=urlencode(query, doseq=True)))
+    captcha_path = parts.path
+
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=False)
+            try:
+                page = await (await browser.new_context()).new_page()
+                await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + CAPTCHA_TIMEOUT
+                while loop.time() < deadline:
+                    if cancelled() or page.is_closed() or not browser.is_connected():
+                        return False
+                    cur = urlsplit(page.url)
+                    if cur.netloc and cur.path != captcha_path:
+                        await asyncio.sleep(1)  # дать hh.ru записать решение
+                        return True
+                    await asyncio.sleep(1)
+                return False
+            finally:
+                if browser.is_connected():
+                    await browser.close()
+    except Exception:
+        return False
 
 
 def _search(api, query: dict[str, Any], page: int) -> dict[str, Any]:
