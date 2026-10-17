@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from datetime import datetime
 from typing import Any
@@ -380,7 +381,50 @@ def _make_tool():
     argv = ["--profile-id", profile_cli_id()]
     tool = HHApplicantTool()
     tool._assign_args(tool._parser.parse_args(argv, namespace=BaseNamespace()))
+    _install_safe_refresh(tool)
     return tool
+
+
+class AuthExpired(Exception):
+    pass
+
+
+# refresh_token у hh.ru одноразовый. Экземпляров движка у нас много (вкладки,
+# рассылка, которая с паузами идёт десятки минут), и каждый держит свою копию
+# токена. Без замка двое обновляют одним refresh_token — второй получает
+# «token has already been refreshed», а сохранённый токен может оказаться мёртвым.
+_token_lock = threading.Lock()
+
+
+def _install_safe_refresh(tool) -> None:
+    client = tool.api_client
+    original = client.refresh_access_token
+
+    def refresh() -> None:
+        with _token_lock:
+            tool.config.load()  # что лежит на диске сейчас
+            saved = tool.config.get("token") or {}
+            fresh_on_disk = (
+                saved.get("refresh_token")
+                and saved["refresh_token"] != client.refresh_token
+                and (saved.get("access_expires_at") or 0) > time.time()
+            )
+            if fresh_on_disk:
+                # другой экземпляр уже обновил — берём его токен
+                client.handle_access_token(saved)
+                return
+            try:
+                original()
+            except Exception as e:
+                if "invalid_grant" in str(e):
+                    raise AuthExpired(
+                        "вход в hh.ru устарел — нажми «Войти в hh.ru» и войди заново"
+                    ) from e
+                raise
+            # сохраняем сразу, а не в конце операции: старый refresh_token уже сгорел
+            tool.config.save(token=client.get_access_token())
+
+    client.refresh_access_token = refresh
 
 
 def preview_apply(params: dict[str, Any]) -> dict[str, Any]:
