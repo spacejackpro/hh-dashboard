@@ -33,6 +33,7 @@ echo [2/3] Downloading the tool and libraries (takes a few minutes)...
 if errorlevel 1 ( echo Install error. Check your internet and try again. & pause & exit /b 1 )
 
 echo [3/3] Downloading browser for hh.ru login (~150 MB)...
+.venv\Scripts\hh-applicant-tool.exe settings disable_version_check true >nul 2>&1
 .venv\Scripts\hh-applicant-tool.exe install
 
 echo.

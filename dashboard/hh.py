@@ -382,7 +382,28 @@ def _make_tool():
     tool = HHApplicantTool()
     tool._assign_args(tool._parser.parse_args(argv, namespace=BaseNamespace()))
     _install_safe_refresh(tool)
+    _silence_version_check(tool)
     return tool
+
+
+_version_check_silenced: set[str] = set()
+
+
+def _silence_version_check(tool) -> None:
+    """Движок закреплён на 1.8.13 (2.x несовместим), а сам он при каждом запуске
+    кричит «ВЕРСИЯ УСТАРЕЛА» — пугает и зовёт обновиться. Настройка своя у
+    каждого аккаунта, поэтому ставим её при первом обращении к профилю."""
+    from .paths import profile_cli_id
+
+    pid = profile_cli_id()
+    if pid in _version_check_silenced:
+        return
+    try:
+        if not tool.storage.settings.get_value("disable_version_check", False):
+            tool.storage.settings.set_value("disable_version_check", True, commit=True)
+        _version_check_silenced.add(pid)
+    except Exception:
+        pass  # не критично — максимум увидим предупреждение
 
 
 class AuthExpired(Exception):

@@ -29,6 +29,7 @@ echo "[2/3] Upgrading the hh-applicant-tool engine and libraries..."
 .venv/bin/pip install -q -U -r requirements.txt
 
 echo "[3/3] Checking browser for hh.ru login..."
+.venv/bin/hh-applicant-tool settings disable_version_check true >/dev/null 2>&1
 .venv/bin/hh-applicant-tool install
 
 echo

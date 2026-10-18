@@ -29,6 +29,7 @@ echo [2/3] Upgrading the hh-applicant-tool engine and libraries...
 .venv\Scripts\pip.exe install -q -U -r requirements.txt
 
 echo [3/3] Checking browser for hh.ru login...
+.venv\Scripts\hh-applicant-tool.exe settings disable_version_check true >nul 2>&1
 .venv\Scripts\hh-applicant-tool.exe install
 
 echo.

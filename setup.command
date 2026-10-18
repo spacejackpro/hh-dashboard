@@ -45,6 +45,7 @@ echo "[2/3] Downloading the tool and libraries (takes a few minutes)..."
 .venv/bin/pip install -q -r requirements.txt || { echo "Install error. Check your internet and try again."; read -p "Press Enter..."; exit 1; }
 
 echo "[3/3] Downloading browser for hh.ru login (~150 MB)..."
+.venv/bin/hh-applicant-tool settings disable_version_check true >/dev/null 2>&1
 .venv/bin/hh-applicant-tool install
 
 echo
